@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Trust system certificates and user-added certificates -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust preinstalled CAs -->
+            <certificates src="system" />
+            <!-- Additionally trust user-added CAs (useful for debugging) -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Allow cleartext traffic for localhost (useful for development) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+    
+    <!-- Specific configuration for your API domain -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">attendance.curelogics.org</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
