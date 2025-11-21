@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 import config from '../config/app.config';
 import { StorageService } from '../services/StorageService';
 
@@ -7,19 +8,19 @@ export interface ApiResponse {
   isSuccess: boolean;
   message: string;
   data?: any;
+  fileUrl?: string; // For file upload responses
 }
 
 // 1. Prepare the Base URL securely
 const API_DOMAIN = config.API.BASE_URL.replace(/\/$/, '');
 const ATTENDANCE_PATH = '/attendance-api/attendance';
 
-// Final Base URL: https://attendance.curelogics.org/attendance-api/attendance
 const BASE_URL = `${API_DOMAIN}${ATTENDANCE_PATH}`;
 
 // 2. Create an Axios Instance (Best Practice)
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000, // 15 Seconds timeout (Important for slow networks)
+  timeout: 15000, 
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -146,26 +147,50 @@ export const AttendanceAPI = {
     }
   },
 
-  uploadProfilePic: async (file: any): Promise<ApiResponse> => {
+  uploadProfilePic: async (imageAsset: any): Promise<ApiResponse> => {
     const userBaseUrl = `${API_DOMAIN}/attendance-api/user`;
-    console.log(`🚀 Uploading profile picture to: ${userBaseUrl}/uploadProfilePic`);
-    console.log('📦 File:', file);
+    const url = `${userBaseUrl}/uploadProfilePic`;
+
+    console.log('� Preparing Upload to:', url);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
       const token = await StorageService.getAccessToken();
-      const res = await axios.post(`${userBaseUrl}/uploadProfilePic`, formData, {
+
+      // 1. Create FormData
+      const formData = new FormData();
+
+      // 2. Append the file EXACTLY like this
+      formData.append('file', {
+        uri: Platform.OS === 'android'
+          ? imageAsset.uri // Android often needs the direct URI
+          : imageAsset.uri.replace('file://', ''), // iOS sometimes needs file:// removed
+        type: imageAsset.type || 'image/jpeg', // Default if type is missing
+        name: imageAsset.fileName || `profile_${Date.now()}.jpg`, // Name is MANDATORY
+      } as any);
+
+      console.log('📦 FormData Created. Sending...');
+
+      // 3. Send Request with proper headers
+      const response = await axios.post(url, formData, {
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
-          ...(token && { Authorization: `Bearer ${token}` }),
         },
-        timeout: 15000,
+        transformRequest: (data, headers) => {
+          // React Native Axios fix: prevents Axios from destroying FormData
+          return data;
+        },
+        timeout: 30000, // Longer timeout for file uploads
       });
-      return res.data;
+
+      console.log('✅ Upload Success:', response.data);
+      return response.data;
+
     } catch (error: any) {
-      console.error('❌ Upload Profile Pic Error:', error.message);
+      console.error('❌ Upload Error Details:', error.message);
+      if (error.response) {
+        console.error('Server Response:', error.response.data);
+      }
       throw error;
     }
   },
@@ -188,6 +213,47 @@ export const AttendanceAPI = {
       return res.data;
     } catch (error: any) {
       console.error('❌ Create Leave Error:', error.message);
+      throw error;
+    }
+  },
+
+  // Alternative upload function using fetch (if axios fails)
+  uploadProfilePicFetch: async (imageAsset: any): Promise<ApiResponse> => {
+    const userBaseUrl = `${API_DOMAIN}/attendance-api/user`;
+    const url = `${userBaseUrl}/uploadProfilePic`;
+
+    console.log('🚀 Preparing Fetch Upload to:', url);
+
+    try {
+      const token = await StorageService.getAccessToken();
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri: imageAsset.uri,
+        type: imageAsset.type || 'image/jpeg',
+        name: imageAsset.fileName || 'upload.jpg',
+      } as any);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Note: Do NOT set Content-Type for fetch, it sets boundary automatically
+        },
+        body: formData,
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(JSON.stringify(json));
+      }
+
+      console.log('✅ Fetch Upload Success:', json);
+      return json;
+
+    } catch (error: any) {
+      console.error('❌ Fetch Upload Error:', error);
       throw error;
     }
   },

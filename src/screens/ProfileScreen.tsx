@@ -94,16 +94,23 @@ export default function ProfileScreen() {
         try {
           setUploading(true);
 
-          // Create form data for upload
-          const formData = new FormData();
-          formData.append('file', {
-            uri: asset.uri,
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `profile_${Date.now()}.jpg`,
-          });
+          // Upload the image directly with the asset
+          // If axios upload fails, you can try: await AttendanceAPI.uploadProfilePicFetch(asset);
+          const result = await AttendanceAPI.uploadProfilePic(asset);
 
-          // Upload the image
-          const result = await AttendanceAPI.uploadProfilePic(formData);
+          if (result.isSuccess) {
+            SnackbarService.showSuccess('Profile picture updated successfully!');
+
+            // Update local user data with new profile photo URL from response
+            const profilePhotoUrl = result.fileUrl || result.data?.fileUrl;
+            if (profilePhotoUrl) {
+              const updatedUserData = { ...userData!, profilePhotoUrl };
+              setUserData(updatedUserData);
+              await StorageService.saveUserData(updatedUserData);
+            }
+          } else {
+            SnackbarService.showError(result.message || 'Failed to upload profile picture');
+          }
 
           if (result.isSuccess) {
             SnackbarService.showSuccess('Profile picture updated successfully!');
