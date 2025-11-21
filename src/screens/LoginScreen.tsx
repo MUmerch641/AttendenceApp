@@ -22,6 +22,7 @@ import { Mail, Lock, Eye, EyeOff, X } from 'lucide-react-native';
 import { NavigationService } from '../services/NavigationService';
 import { AuthAPI } from '../api/auth';
 import { SnackbarService } from '../services/SnackbarService';
+import { StorageService } from '../services/StorageService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -43,9 +44,23 @@ export default function LoginScreen() {
     try {
       const response = await AuthAPI.login({ email, password });
       console.log('Login Response:', response);
-      SnackbarService.showSuccess('Login successful!');
-      // Assuming response has token or user data, navigate to home
-      NavigationService.navigate('Dashboard');
+      
+      if (response.isSuccess) {
+        // Save tokens
+        if (response.data?.token) {
+          await StorageService.saveTokens(response.data.token);
+        }
+        
+        // Save user data
+        if (response.data?.userObject) {
+          await StorageService.saveUserData(response.data.userObject);
+        }
+        
+        SnackbarService.showSuccess(response.message || 'Login successful!');
+        NavigationService.navigate('Dashboard');
+      } else {
+        SnackbarService.showError(response.message || 'Login failed');
+      }
     } catch (error: any) {
       console.log('Login Error:', error);
       const message = error.response?.data?.message || 'Login failed';
@@ -63,10 +78,15 @@ export default function LoginScreen() {
 
     setForgotLoading(true);
     try {
-      await AuthAPI.forget({ email: forgotEmail });
-      SnackbarService.showSuccess('Password reset email sent!');
-      setModalVisible(false);
-      setForgotEmail('');
+      const response = await AuthAPI.forget({ email: forgotEmail });
+      
+      if (response.isSuccess) {
+        SnackbarService.showSuccess(response.message || 'Password reset email sent!');
+        setModalVisible(false);
+        setForgotEmail('');
+      } else {
+        SnackbarService.showError(response.message || 'Failed to send reset email');
+      }
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to send reset email';
       SnackbarService.showError(message);

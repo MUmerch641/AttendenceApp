@@ -1,6 +1,8 @@
 import axios from 'axios';
 import ReactNativeBiometrics from 'react-native-biometrics';
 import config from '../config/app.config';
+import { StorageService } from './StorageService';
+import { SnackbarService } from './SnackbarService';
 
 const rnBiometrics = new ReactNativeBiometrics();
 
@@ -30,7 +32,7 @@ export const AttendanceService = {
   },
 
   // 3. Send Data to Backend
-  markAttendance: async (userId: string, type: 'CHECK_IN' | 'CHECK_OUT') => {
+  markAttendance: async (userId: string, type: 'CHECK_IN' | 'CHECK_OUT'): Promise<{isSuccess: boolean, message: string, data?: any}> => {
     try {
       const payload = {
         userId: userId,
@@ -43,18 +45,36 @@ export const AttendanceService = {
       console.log('🚀 Sending to Backend:', payload);
 
       // UNCOMMENT THIS WHEN YOU HAVE A REAL SERVER
-      // const response = await axios.post(`${API_URL}/mark`, payload);
-      // return response.data;
+      const response = await axios.post(`${API_URL}/attendance/mark`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await StorageService.getAccessToken()}`
+        }
+      });
+      
+      if (response.data.isSuccess) {
+        SnackbarService.showSuccess(response.data.message || `${type} Successful`);
+      } else {
+        SnackbarService.showError(response.data.message || `${type} Failed`);
+      }
+      
+      return response.data;
 
       // FAKE SUCCESS RESPONSE (For testing UI)
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({ success: true, message: `${type} Successful`, data: payload });
-        }, 1500); // Simulate network delay
-      });
+      // return new Promise((resolve) => {
+      //   setTimeout(() => {
+      //     resolve({ 
+      //       isSuccess: true, 
+      //       message: `${type} Successful`, 
+      //       data: payload 
+      //     });
+      //   }, 1500); // Simulate network delay
+      // });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('API Error', error);
+      const message = error.response?.data?.message || `${type} failed`;
+      SnackbarService.showError(message);
       throw error;
     }
   }

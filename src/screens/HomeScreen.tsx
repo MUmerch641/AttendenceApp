@@ -18,6 +18,9 @@ import {
 } from 'lucide-react-native';
 import { AttendanceService } from '../services/AttendanceService'; // Import the service
 import { SnackbarService } from '../services/SnackbarService'; // Import snackbar service
+import { StorageService, UserData } from '../services/StorageService'; // Import storage service
+import { NavigationService } from '../services/NavigationService'; // Import navigation service
+import { AttendanceAPI } from '../api/attendance'; // Import attendance API
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +33,20 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false); // Tracks API loading
   const [checkInTime, setCheckInTime] = useState('--:--');
   const [workedTime, setWorkedTime] = useState('0h 0m');
+  const [userData, setUserData] = useState<UserData | null>(null);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const data = await StorageService.getUserData();
+      setUserData(data);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
 
   // Dummy data for the "Today Time Log" grid
   const timeLogs = [
@@ -40,9 +57,16 @@ export default function HomeScreen() {
     { label: 'Over Time', time: '0h 0m', color: '#F1F5F9', icon: Timer },
   ];
 
-  // Function to Handle Fingerprint Press
+  // Function to Handle Tab Press
+  const handleTabPress = (tab: 'Check' | 'Break' | 'Leave') => {
+    if (tab === 'Leave') {
+      NavigationService.navigate('LeaveRequest');
+    } else {
+      setActiveTab(tab);
+    }
+  };
   const handleAttendancePress = async () => {
-    
+
     // 1. Check availability (Optional, good for debugging)
     const { available } = await AttendanceService.checkAvailability();
     if (!available) {
@@ -52,27 +76,41 @@ export default function HomeScreen() {
 
     // 2. Authenticate (Fingerprint Popup)
     const isAuthenticated = await AttendanceService.authenticateUser();
-    
+
     if (isAuthenticated) {
       setLoading(true); // Start Spinner
 
       try {
-        // 3. Decide Type (If currently checked in, then Check Out, otherwise Check In)
-        const type = isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN';
-        
-        // 4. Send to Backend
-        const response = await AttendanceService.markAttendance('USER_123', type);
-        
+        // 3. Get user data for employee ID
+        const userData = await StorageService.getUserData();
+        if (!userData) {
+          SnackbarService.showError('User data not found. Please login again.');
+          return;
+        }
+
+        // 4. Create attendance record
+        const payload = {
+          empId: userData.employeeId,
+          reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN'
+        };
+
+        const response = await AttendanceAPI.create(payload);
+
         console.log('Backend Response:', response);
 
-        // 5. Update UI based on success
-        if (type === 'CHECK_IN') {
-          setIsCheckedIn(true);
-          setCheckInTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          SnackbarService.showSuccess("Checked In Successfully!");
+        // 5. Check response success
+        if (response.isSuccess) {
+          // Update UI based on success
+          if (!isCheckedIn) {
+            setIsCheckedIn(true);
+            setCheckInTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            SnackbarService.showSuccess(response.message || "Checked In Successfully!");
+          } else {
+            setIsCheckedIn(false);
+            SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
+          }
         } else {
-          setIsCheckedIn(false);
-          SnackbarService.showSuccess("Checked Out Successfully!");
+          SnackbarService.showError(response.message || "Failed to mark attendance");
         }
 
       } catch (error) {
@@ -82,6 +120,18 @@ export default function HomeScreen() {
       }
     } else {
       SnackbarService.showError("Biometric authentication failed");
+    }
+  };
+
+  // Function to Handle Logout
+  const handleLogout = async () => {
+    try {
+      await StorageService.clearAllData();
+      SnackbarService.showSuccess('Logged out successfully');
+      NavigationService.navigate('LoginScreen');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      SnackbarService.showError('Error during logout');
     }
   };
 
@@ -109,7 +159,7 @@ export default function HomeScreen() {
           <View style={styles.userInfo}>
             {/* Avatar Placeholder */}
             <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&auto=format&fit=crop&q=60' }}
+              source={{ uri: userData?.profilePhotoUrl || 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&auto=format&fit=crop&q=60' }}
               style={styles.avatar}
             />
             <View>
@@ -121,12 +171,9 @@ export default function HomeScreen() {
             </View>
           </View>
           
-          {/* Notification Bell */}
-          <TouchableOpacity style={styles.bellButton}>
-            <Bell size={24} color="#1E293B" />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.badgeText}>1</Text>
-            </View>
+          {/* Logout Button */}
+          <TouchableOpacity style={styles.bellButton} onPress={handleLogout}>
+            <LogOut size={24} color="#1E293B" />
           </TouchableOpacity>
         </View>
 
@@ -136,7 +183,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={tab}
               style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
-              onPress={() => setActiveTab(tab as any)}
+              onPress={() => handleTabPress(tab as any)}
             >
               {tab === 'Check' && <CheckCircle size={18} color={activeTab === 'Check' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />}
               {tab === 'Break' && <Coffee size={18} color={activeTab === 'Break' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />}

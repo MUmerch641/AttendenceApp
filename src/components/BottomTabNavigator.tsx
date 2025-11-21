@@ -2,7 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, FileText, Settings, User } from 'lucide-react-native';
-import HomeScreen from '../screens/HomeScreen';
+import HomeScreen from '../screens/HomeScreen';   
+import ProfileScreen from '../screens/ProfileScreen';
+import HistoryScreen from '../screens/HistoryScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -127,21 +130,21 @@ export default function BottomTabNavigator() {
       />
       <Tab.Screen
         name="History"
-        component={() => <PlaceholderScreen name="History" />}
+        component={HistoryScreen}
         options={{
           tabBarIcon: ({ focused }) => <AnimatedTabIcon focused={focused} icon={FileText} label="History" />,
         }}
       />
       <Tab.Screen
         name="Settings"
-        component={() => <PlaceholderScreen name="Settings" />}
+        component={SettingsScreen}
         options={{
           tabBarIcon: ({ focused }) => <AnimatedTabIcon focused={focused} icon={Settings} label="Settings" />,
         }}
       />
       <Tab.Screen
         name="Profile"
-        component={() => <PlaceholderScreen name="Profile" />}
+        component={ProfileScreen}
         options={{
           tabBarIcon: ({ focused }) => <AnimatedTabIcon focused={focused} icon={User} label="Profile" />,
         }}
