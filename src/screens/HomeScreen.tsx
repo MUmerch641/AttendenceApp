@@ -265,7 +265,7 @@ export default function HomeScreen() {
         {/* --- THIS MONTH CHART --- */}
         <View style={{ marginTop: 24, paddingHorizontal: 24 }}>
             <Text style={styles.sectionTitle}>This Month</Text>
-            
+        
             <View style={styles.chartCard}>
                 <View style={styles.chartHeader}>
                    <Text style={styles.sectionSubtitle}>Weekly Attendance</Text>

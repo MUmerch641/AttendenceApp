@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, FileText, Settings, User } from 'lucide-react-native';
 import HomeScreen from '../screens/HomeScreen';   
@@ -8,6 +8,48 @@ import HistoryScreen from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// <CHANGE> Calculate responsive values based on screen dimensions
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveValues = () => {
+  if (isSmallScreen) {
+    return {
+      tabBarHeight: 64,
+      iconSize: 20,
+      pillWidth: 48,
+      expandedPillWidth: 95,
+      bottom: 16,
+      horizontalPadding: 12,
+      labelFontSize: 11,
+    };
+  } else if (isMediumScreen) {
+    return {
+      tabBarHeight: 70,
+      iconSize: 22,
+      pillWidth: 50,
+      expandedPillWidth: 105,
+      bottom: 20,
+      horizontalPadding: 14,
+      labelFontSize: 12,
+    };
+  } else {
+    return {
+      tabBarHeight: 74,
+      iconSize: 24,
+      pillWidth: 52,
+      expandedPillWidth: 110,
+      bottom: 24,
+      horizontalPadding: 16,
+      labelFontSize: 13.5,
+    };
+  }
+};
+
+const responsiveValues = getResponsiveValues();
 
 const PlaceholderScreen = ({ name }: { name: string }) => (
   <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F6F8FF' }}>
@@ -15,16 +57,15 @@ const PlaceholderScreen = ({ name }: { name: string }) => (
   </View>
 );
 
-// <CHANGE> Improved AnimatedTabIcon to hide pill and label when unfocused with smooth animations
+// <CHANGE> Improved AnimatedTabIcon with responsive sizing
 const AnimatedTabIcon = ({ focused, icon: Icon, label }: { focused: boolean; icon: any; label: string }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const bgOpacity = useRef(new Animated.Value(0)).current;
-  const pillWidth = useRef(new Animated.Value(48)).current;
+  const pillWidth = useRef(new Animated.Value(responsiveValues.pillWidth)).current;
 
   useEffect(() => {
     if (focused) {
-      // Activate - Show full pill with label
       Animated.parallel([
         Animated.spring(scale, {
           toValue: 1.15,
@@ -43,13 +84,12 @@ const AnimatedTabIcon = ({ focused, icon: Icon, label }: { focused: boolean; ico
           useNativeDriver: false,
         }),
         Animated.timing(pillWidth, {
-          toValue: 110,
+          toValue: responsiveValues.expandedPillWidth,
           duration: 320,
           useNativeDriver: false,
         }),
       ]).start();
     } else {
-      // Deactivate - Hide pill and label, show only icon
       Animated.parallel([
         Animated.spring(scale, {
           toValue: 1,
@@ -68,7 +108,7 @@ const AnimatedTabIcon = ({ focused, icon: Icon, label }: { focused: boolean; ico
           useNativeDriver: false,
         }),
         Animated.timing(pillWidth, {
-          toValue: 48,
+          toValue: responsiveValues.pillWidth,
           duration: 280,
           useNativeDriver: false,
         }),
@@ -95,12 +135,11 @@ const AnimatedTabIcon = ({ focused, icon: Icon, label }: { focused: boolean; ico
         ]}
       >
         <Animated.View style={{ transform: [{ scale }] }}>
-          <Icon size={24} color={focused ? '#FFFFFF' : '#94A3B8'} strokeWidth={2.4} />
+          <Icon size={responsiveValues.iconSize} color={focused ? '#FFFFFF' : '#94A3B8'} strokeWidth={2.4} />
         </Animated.View>
 
-        {/* <CHANGE> Only render label when focused to remove unnecessary content */}
         {focused && (
-          <Animated.Text style={[styles.label, { opacity }]}>
+          <Animated.Text style={[styles.label, { opacity, fontSize: responsiveValues.labelFontSize }]}>
             {label}
           </Animated.Text>
         )}
@@ -115,8 +154,8 @@ export default function BottomTabNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
-        tabBarStyle: styles.tabBar,
-        tabBarItemStyle: { marginTop: 8 },
+        tabBarStyle: [styles.tabBar, { height: responsiveValues.tabBarHeight, bottom: responsiveValues.bottom }],
+        tabBarItemStyle: { flex: 1, marginTop: isSmallScreen ? 4 : 8, justifyContent: 'center', alignItems: 'center' },
         tabBarActiveTintColor: '#5B4BFF',
         tabBarInactiveTintColor: '#94A3B8',
       }}
@@ -156,10 +195,8 @@ export default function BottomTabNavigator() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: 28,
-    left: 20,
-    right: 20,
-    height: 74,
+    left: responsiveValues.horizontalPadding,
+    right: responsiveValues.horizontalPadding,
     borderRadius: 37,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 0,
@@ -168,22 +205,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 15 },
     shadowOpacity: 0.15,
     shadowRadius: 25,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-  },
-  iconWrapper: {
-    width: 110,
-    height: 56,
-    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
   },
+  iconWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+  },
   pill: {
-    height: 48,
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
+    height: isSmallScreen ? 42 : 48,
     shadowColor: '#5B4BFF',
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 16,
@@ -191,9 +230,8 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#FFFFFF',
-    fontSize: 13.5,
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 6,
     letterSpacing: 0.3,
   },
 });
