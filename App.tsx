@@ -5,8 +5,8 @@
  * @format
  */
 
-import React, { useEffect } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Text } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StatusBar, StyleSheet, useColorScheme, View, Text, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
@@ -39,31 +39,42 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const checkTokenAndNavigate = async () => {
+    const checkAuthentication = async () => {
       try {
-        const isLoggedIn = await StorageService.isLoggedIn();
-        if (isLoggedIn) {
-          // User is logged in, navigate to Dashboard
-          setTimeout(() => {
-            navigationRef.current?.navigate('Dashboard');
-          }, 100); // Small delay to ensure navigation is ready
-        }
-        // If not logged in, stay on Welcome screen (default)
+        const loggedIn = await StorageService.isLoggedIn();
+        setIsAuthenticated(loggedIn);
       } catch (error) {
-        console.error('Error checking login status:', error);
+        console.error('Error checking authentication:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    checkTokenAndNavigate();
+    checkAuthentication();
   }, []);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#5B4BFF" />
+        <Text style={{ marginTop: 16, color: '#64748B' }}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <NetworkProvider>
       <NavigationContainer ref={navigationRef}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-        <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
+        <Stack.Navigator 
+          initialRouteName={isAuthenticated ? "Dashboard" : "Welcome"} 
+          screenOptions={{ headerShown: false }}
+        >
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="Dashboard" component={BottomTabNavigator} />

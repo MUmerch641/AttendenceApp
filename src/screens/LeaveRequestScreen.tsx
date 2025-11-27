@@ -18,9 +18,6 @@ import LinearGradient from 'react-native-linear-gradient';
 import {
   Calendar,
   User,
-  Paperclip,
-  Camera,
-  Trash2,
   ChevronDown,
   Check,
   AlertCircle,
@@ -30,15 +27,12 @@ import { NavigationService } from '../services/NavigationService';
 import { AttendanceAPI } from '../api/attendance';
 import { StorageService } from '../services/StorageService';
 import { SnackbarService } from '../services/SnackbarService';
-import { launchImageLibrary } from 'react-native-image-picker';
 
 export default function LeaveRequestScreen() {
   const [reason, setReason] = useState('');
   const [selectedLeaveType, setSelectedLeaveType] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedSubstitute, setSelectedSubstitute] = useState<any>(null);
-  const [attachment, setAttachment] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -52,41 +46,6 @@ export default function LeaveRequestScreen() {
     'paternity leave',
     'emergency leave',
   ];
-
-  // Mock substitutes
-  const substitutes = [
-    { id: 1, name: 'John Doe', avatar: 'https://randomuser.me/api/portraits/men/32.jpg' },
-    { id: 2, name: 'Sarah Wilson', avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
-    { id: 3, name: 'Mike Chen', avatar: 'https://randomuser.me/api/portraits/men/45.jpg' },
-  ];
-
-  const pickImage = async () => {
-    const options = {
-      mediaType: 'photo' as const,
-      includeBase64: false,
-      maxHeight: 1024,
-      maxWidth: 1024,
-      quality: 0.8 as const,
-    };
-
-    launchImageLibrary(options, (response) => {
-      if (response.didCancel) {
-        return;
-      }
-
-      if (response.errorMessage) {
-        console.error('ImagePicker Error: ', response.errorMessage);
-        SnackbarService.showError('Failed to select image');
-        return;
-      }
-
-      if (response.assets && response.assets[0] && response.assets[0].uri) {
-        setAttachment(response.assets[0].uri);
-      }
-    });
-  };
-
-  const removeAttachment = () => setAttachment(null);
 
   const calculateLeaveDays = () => {
     if (!startDate || !endDate) return 0;
@@ -205,7 +164,7 @@ export default function LeaveRequestScreen() {
         <View style={styles.section}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Leave Type</Text>
-            <Text style={styles.required}>Required</Text>
+            <Text style={styles.required}>*</Text>
           </View>
 
           <TouchableOpacity style={styles.picker} onPress={() => setShowLeaveTypeModal(true)}>
@@ -220,7 +179,7 @@ export default function LeaveRequestScreen() {
         <View style={styles.section}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Duration</Text>
-            <Text style={styles.required}>Required</Text>
+            <Text style={styles.required}>*</Text>
           </View>
 
           <View style={styles.dateContainer}>
@@ -258,8 +217,7 @@ export default function LeaveRequestScreen() {
         <View style={styles.section}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Reason</Text>
-            <Text style={styles.required}>Required</Text>
-            <Text style={styles.charCount}>{reason.length}/500</Text>
+            <Text style={styles.required}>*</Text>
           </View>
 
           <View style={styles.textInputContainer}>
@@ -274,67 +232,15 @@ export default function LeaveRequestScreen() {
               onChangeText={setReason}
               textAlignVertical="top"
             />
+            
           </View>
+            <Text style={styles.charCount}>{reason.length}/500</Text>
 
           {reason.length > 10 && (
             <View style={styles.successBadge}>
               <Check size={18} color="#10B981" />
               <Text style={styles.successText}>Reason added</Text>
             </View>
-          )}
-        </View>
-
-        {/* Substitute Section */}
-        <View style={styles.section}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Substitute: (optional)</Text>
-            <Text style={styles.availableCount}>16 available</Text>
-          </View>
-
-          <TouchableOpacity style={styles.substitutePicker}>
-            {selectedSubstitute ? (
-              <View style={styles.selectedSubstitute}>
-                <Image source={{ uri: selectedSubstitute.avatar }} style={styles.subAvatar} />
-                <Text style={styles.subName}>{selectedSubstitute.name}</Text>
-                <Check size={20} color="#5B4BFF" style={styles.checkIcon} />
-              </View>
-            ) : (
-              <View style={styles.placeholderRow}>
-                <View style={styles.placeholderAvatar} />
-                <Text style={styles.placeholderText}>Select a substitute</Text>
-              </View>
-            )}
-            <ChevronDown size={22} color="#64748B" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Attachment Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Attachment: (optional)</Text>
-
-          {attachment ? (
-            <View style={styles.attachmentPreview}>
-              <Image source={{ uri: attachment }} style={styles.previewImage} />
-              <View style={styles.attachmentActions}>
-                <TouchableOpacity style={[styles.actionBtn, styles.changeBtn]} onPress={pickImage}>
-                  <Camera size={18} color="#5B4BFF" />
-                  <Text style={[styles.actionText, { color: '#5B4BFF' }]}>Change Image</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, styles.removeBtn]} onPress={removeAttachment}>
-                  <Trash2 size={18} color="#EF4444" />
-                  <Text style={[styles.actionText, { color: '#EF4444' }]}>Remove</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.successBadge}>
-                <Check size={18} color="#10B981" />
-                <Text style={styles.successText}>Image attached successfully</Text>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
-              <Paperclip size={20} color="#5B4BFF" />
-              <Text style={styles.uploadText}>Add Attachment</Text>
-            </TouchableOpacity>
           )}
         </View>
 
@@ -371,16 +277,6 @@ export default function LeaveRequestScreen() {
 
                   <Text style={styles.summaryLabel}>Reason:</Text>
                   <Text style={styles.summaryValue}>{reason || 'Not provided'}</Text>
-
-                  {selectedSubstitute && (
-                    <>
-                      <Text style={styles.summaryLabel}>Substitute:</Text>
-                      <Text style={styles.summaryValue}>{selectedSubstitute.name}</Text>
-                    </>
-                  )}
-
-                  <Text style={styles.summaryLabel}>Attachment:</Text>
-                  <Text style={styles.summaryValue}>{attachment ? 'Included' : 'Not included'}</Text>
                 </View>
 
                 <View style={styles.managerNote}>
@@ -450,11 +346,11 @@ const styles = StyleSheet.create({
 
   section: { marginHorizontal: 24, marginBottom: 28 },
 
-  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, justifyContent: 'space-between' },
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 4 },
   label: { fontSize: 18, fontWeight: '700', color: '#0B1226' },
-  required: { fontSize: 14, color: '#EF4444', fontWeight: '600' },
+  required: { fontSize: 20, color: '#EF4444', fontWeight: '700' },
   charCount: { fontSize: 14, color: '#64748B' },
-  availableCount: { fontSize: 14, color: '#5B4BFF', fontWeight: '600' },
+  availableCount: { fontSize: 14, color: '#5B4BFF', fontWeight: '600', marginTop: 10 },
 
   picker: {
     backgroundColor: 'rgba(255,255,255,0.96)',
@@ -470,6 +366,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   selectedText: { fontSize: 16, color: '#0B1226', fontWeight: '600' },
+  placeholderText: { color: '#94A3B8', fontSize: 16 },
 
   dateContainer: { gap: 12 },
   dateField: {
@@ -524,49 +421,6 @@ const styles = StyleSheet.create({
     borderColor: '#10B98130',
   },
   successText: { color: '#10B981', fontWeight: '600', fontSize: 14 },
-
-  substitutePicker: {
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderRadius: 20,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 12,
-  },
-  placeholderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  placeholderAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E2E8F0' },
-  placeholderText: { color: '#94A3B8', fontSize: 16 },
-  selectedSubstitute: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  subAvatar: { width: 40, height: 40, borderRadius: 20 },
-  subName: { fontSize: 16, fontWeight: '600', color: '#0B1226' },
-  checkIcon: { marginLeft: 'auto' },
-
-  uploadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(91, 75, 255, 0.08)',
-    paddingVertical: 16,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#5B4BFF30',
-    borderStyle: 'dashed',
-  },
-  uploadText: { color: '#5B4BFF', fontWeight: '600', fontSize: 16 },
-
-  attachmentPreview: { alignItems: 'center' },
-  previewImage: { width: '100%', height: 200, borderRadius: 16, marginBottom: 16 },
-  attachmentActions: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 30 },
-  changeBtn: { backgroundColor: '#EFF6FF', borderWidth: 1.5, borderColor: '#5B4BFF' },
-  removeBtn: { backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#EF4444' },
-  actionText: { fontWeight: '600', fontSize: 14 },
 
   submitButton: {
     backgroundColor: '#5B4BFF',

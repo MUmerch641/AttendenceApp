@@ -32,6 +32,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [checkInTime, setCheckInTime] = useState('--:--');
   const [workedTime, setWorkedTime] = useState('0h 0m');
+  const [checkInTimestamp, setCheckInTimestamp] = useState<Date | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [employeeStats, setEmployeeStats] = useState<{
     onTimeDays: number;
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const loadUserData = async () => {
     try {
       const data = await StorageService.getUserData();
+      console.log('Loaded User Data:', data);
       setUserData(data);
       if (data) await loadEmployeeStats(data._id);
     } catch (error) {
@@ -110,10 +112,20 @@ export default function HomeScreen() {
       if (response.isSuccess) {
         if (!isCheckedIn) {
           setIsCheckedIn(true);
-          setCheckInTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          const now = new Date();
+          setCheckInTimestamp(now);
+          setCheckInTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
           SnackbarService.showSuccess(response.message || "Checked In Successfully!");
         } else {
           setIsCheckedIn(false);
+          if (checkInTimestamp) {
+            const now = new Date();
+            const diffMs = now.getTime() - checkInTimestamp.getTime();
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            setWorkedTime(`${hours}h ${minutes}m`);
+            setCheckInTimestamp(null);
+          }
           SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
         }
       } else {
@@ -129,7 +141,7 @@ export default function HomeScreen() {
   const handleLogout = async () => {
     await StorageService.clearAllData();
     SnackbarService.showSuccess('Logged out successfully');
-    NavigationService.navigate('LoginScreen');
+    NavigationService.reset([{ name: 'Welcome' }]);
   };
 
   return (
@@ -142,15 +154,16 @@ export default function HomeScreen() {
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.userInfo}>
+          
             <Image
               source={{ uri: userData?.profilePhotoUrl || 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400' }}
               style={styles.avatar}
             />
             <View>
-              <Text style={styles.dateText}>Thursday, 30 Oct 2025</Text>
+              <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</Text>
               <View style={styles.greetingRow}>
-                <Text style={styles.greetingText}>Good Noon</Text>
-                <Text style={{ fontSize: 18 }}>Sunny</Text>
+                <Text style={styles.greetingText}>Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}</Text>
+                <Text style={{ fontSize: 18 }}>{userData?.fullName || 'User'}</Text>
               </View>
             </View>
           </View>
@@ -260,9 +273,7 @@ export default function HomeScreen() {
              
               </View>
 
-          
-      
-          Label & Count
+              {/* Label & Count */}
               <Text style={styles.barLabel}>{item.label}</Text>
               {showBadge && <Text style={styles.barCount}>{item.value} days</Text>}
             </View>
