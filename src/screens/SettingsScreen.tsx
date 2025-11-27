@@ -161,7 +161,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           {/* Privacy Policy */}
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => NavigationService.navigate('PrivacyPolicy')}>
             <View style={styles.itemLeft}>
               <View style={styles.iconWrapper}>
                 <Shield size={20} color="#5B4BFF" strokeWidth={2.2} />
@@ -172,7 +172,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           {/* Support Policy */}
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => NavigationService.navigate('SupportPolicy')}>
             <View style={styles.itemLeft}>
               <View style={styles.iconWrapper}>
                 <Headphones size={20} color="#5B4BFF" strokeWidth={2.2} />
@@ -183,7 +183,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           {/* Terms & Conditions */}
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => NavigationService.navigate('TermsConditions')}>
             <View style={styles.itemLeft}>
               <View style={styles.iconWrapper}>
                 <FileText size={20} color="#5B4BFF" strokeWidth={2.2} />

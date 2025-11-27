@@ -14,6 +14,9 @@ import { createStackNavigator } from '@react-navigation/stack';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import LeaveRequestScreen from './src/screens/LeaveRequestScreen';
+import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
+import SupportPolicyScreen from './src/screens/SupportPolicyScreen';
+import TermsConditionsScreen from './src/screens/TermsConditionsScreen';
 
 // Services
 import { navigationRef } from './src/services/NavigationService';
@@ -27,6 +30,9 @@ export type RootStackParamList = {
   LoginScreen: undefined;
   Dashboard: undefined; // This will hold the Bottom Tabs
   LeaveRequest: undefined;
+  PrivacyPolicy: undefined;
+  SupportPolicy: undefined;
+  TermsConditions: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -62,6 +68,9 @@ function App() {
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="Dashboard" component={BottomTabNavigator} />
           <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+          <Stack.Screen name="SupportPolicy" component={SupportPolicyScreen} />
+          <Stack.Screen name="TermsConditions" component={TermsConditionsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </NetworkProvider>

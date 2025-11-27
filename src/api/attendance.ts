@@ -118,6 +118,23 @@ export interface AttendanceReportResponse extends ApiResponse {
   totalCount: number;
 }
 
+export interface EmployeeStatsParams {
+  year: number;
+  month: number;
+  empDocId: string;
+}
+
+export interface EmployeeStatsResponse extends ApiResponse {
+  data: {
+    employeeId: string;
+    assignedSchedule: string;
+    onTimeDays: number;
+    lateDays: number;
+    onLeaveDays: number;
+    absentDays: number;
+  };
+}
+
 export const AttendanceAPI = {
   create: async (payload: CreateAttendancePayload): Promise<ApiResponse> => {
     console.log(`🚀 Creating attendance at: ${BASE_URL}/create`);
@@ -144,6 +161,19 @@ export const AttendanceAPI = {
     } catch (error: any) {
       console.error('❌ AttendanceAPI Report Error:', error.message);
       throw error; // Throw it back to the screen to handle
+    }
+  },
+
+  employeeStats: async (params: EmployeeStatsParams): Promise<EmployeeStatsResponse> => {
+    console.log(`🚀 Fetching employee stats from: ${BASE_URL}/employeeStats`);
+    console.log('📦 Params:', params);
+
+    try {
+      const res = await apiClient.get('/employeeStats', { params });
+      return res.data;
+    } catch (error: any) {
+      console.error('❌ AttendanceAPI EmployeeStats Error:', error.message);
+      throw error;
     }
   },
 

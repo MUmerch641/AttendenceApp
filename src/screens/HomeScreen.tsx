@@ -1,3 +1,4 @@
+// src/screens/HomeScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,7 +9,7 @@ import {
   Image,
   StatusBar,
   Dimensions,
-  ActivityIndicator // Added for loading state
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
@@ -16,24 +17,28 @@ import {
   Bell, Clock, Coffee, LogOut, Fingerprint, Briefcase,
   CheckCircle, AlertCircle, Timer
 } from 'lucide-react-native';
-import { AttendanceService } from '../services/AttendanceService'; // Import the service
-import { SnackbarService } from '../services/SnackbarService'; // Import snackbar service
-import { StorageService, UserData } from '../services/StorageService'; // Import storage service
-import { NavigationService } from '../services/NavigationService'; // Import navigation service
-import { AttendanceAPI } from '../api/attendance'; // Import attendance API
+
+import { AttendanceService } from '../services/AttendanceService';
+import { SnackbarService } from '../services/SnackbarService';
+import { StorageService, UserData } from '../services/StorageService';
+import { NavigationService } from '../services/NavigationService';
+import { AttendanceAPI } from '../api/attendance';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  // State to handle the top tabs (Check, Break, Leave)
   const [activeTab, setActiveTab] = useState<'Check' | 'Break' | 'Leave'>('Check');
-
-  // --- NEW STATES ---
-  const [isCheckedIn, setIsCheckedIn] = useState(false); // Tracks status
-  const [loading, setLoading] = useState(false); // Tracks API loading
+  const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [checkInTime, setCheckInTime] = useState('--:--');
   const [workedTime, setWorkedTime] = useState('0h 0m');
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [employeeStats, setEmployeeStats] = useState<{
+    onTimeDays: number;
+    lateDays: number;
+    onLeaveDays: number;
+    absentDays: number;
+  } | null>(null);
 
   useEffect(() => {
     loadUserData();
@@ -43,21 +48,33 @@ export default function HomeScreen() {
     try {
       const data = await StorageService.getUserData();
       setUserData(data);
+      if (data) await loadEmployeeStats(data._id);
     } catch (error) {
       console.error('Error loading user data:', error);
     }
   };
 
-  // Dummy data for the "Today Time Log" grid
-  const timeLogs = [
-    { label: 'Late In Time', time: '5h 21m', color: '#F1F5F9', icon: AlertCircle },
-    { label: 'Early Check Out', time: '0h 0m', color: '#F1F5F9', icon: LogOut },
-    { label: 'Break Time', time: '0h 11m', color: '#F1F5F9', icon: Coffee },
-    { label: 'Worked Time', time: '0h 20m', color: '#E0E7FF', icon: Briefcase }, // Highlighted
-    { label: 'Over Time', time: '0h 0m', color: '#F1F5F9', icon: Timer },
-  ];
+  const loadEmployeeStats = async (empDocId: string) => {
+    try {
+      const currentDate = new Date();
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      const response = await AttendanceAPI.employeeStats({ year, month, empDocId });
+      if (response.isSuccess && response.data) {
+        setEmployeeStats({
+          onTimeDays: response.data.onTimeDays,
+          lateDays: response.data.lateDays,
+          onLeaveDays: response.data.onLeaveDays,
+          absentDays: response.data.absentDays,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading employee stats:', error);
+    }
+  };
 
-  // Function to Handle Tab Press
+
+
   const handleTabPress = (tab: 'Check' | 'Break' | 'Leave') => {
     if (tab === 'Leave') {
       NavigationService.navigate('LeaveRequest');
@@ -65,130 +82,93 @@ export default function HomeScreen() {
       setActiveTab(tab);
     }
   };
-  const handleAttendancePress = async () => {
 
-    // 1. Check availability (Optional, good for debugging)
+  const handleAttendancePress = async () => {
     const { available } = await AttendanceService.checkAvailability();
     if (!available) {
       SnackbarService.showError('Biometrics not available on this device');
       return;
     }
 
-    // 2. Authenticate (Fingerprint Popup)
     const isAuthenticated = await AttendanceService.authenticateUser();
-
-    if (isAuthenticated) {
-      setLoading(true); // Start Spinner
-
-      try {
-        // 3. Get user data for employee ID
-        const userData = await StorageService.getUserData();
-        if (!userData) {
-          SnackbarService.showError('User data not found. Please login again.');
-          return;
-        }
-
-        // 4. Create attendance record
-        const payload = {
-          empId: userData.employeeId,
-          reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN'
-        };
-
-        const response = await AttendanceAPI.create(payload);
-
-        console.log('Backend Response:', response);
-
-        // 5. Check response success
-        if (response.isSuccess) {
-          // Update UI based on success
-          if (!isCheckedIn) {
-            setIsCheckedIn(true);
-            setCheckInTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            SnackbarService.showSuccess(response.message || "Checked In Successfully!");
-          } else {
-            setIsCheckedIn(false);
-            SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
-          }
-        } else {
-          SnackbarService.showError(response.message || "Failed to mark attendance");
-        }
-
-      } catch (error) {
-        SnackbarService.showError("Failed to connect to server");
-      } finally {
-        setLoading(false); // Stop Spinner
-      }
-    } else {
+    if (!isAuthenticated) {
       SnackbarService.showError("Biometric authentication failed");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const user = await StorageService.getUserData();
+      if (!user) return SnackbarService.showError('User data not found');
+
+      const payload = {
+        empId: user.employeeId,
+        reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN'
+      };
+
+      const response = await AttendanceAPI.create(payload);
+      if (response.isSuccess) {
+        if (!isCheckedIn) {
+          setIsCheckedIn(true);
+          setCheckInTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          SnackbarService.showSuccess(response.message || "Checked In Successfully!");
+        } else {
+          setIsCheckedIn(false);
+          SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
+        }
+      } else {
+        SnackbarService.showError(response.message || "Failed to mark attendance");
+      }
+    } catch (error) {
+      SnackbarService.showError("Failed to connect to server");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Function to Handle Logout
   const handleLogout = async () => {
-    try {
-      await StorageService.clearAllData();
-      SnackbarService.showSuccess('Logged out successfully');
-      NavigationService.navigate('LoginScreen');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      SnackbarService.showError('Error during logout');
-    }
+    await StorageService.clearAllData();
+    SnackbarService.showSuccess('Logged out successfully');
+    NavigationService.navigate('LoginScreen');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-
-      {/* Background Gradient */}
-      <LinearGradient
-        colors={['#E8ECFF', '#F5F7FF', '#FFFFFF']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Decorative Blob (Reused for consistency) */}
+      <LinearGradient colors={['#E8ECFF', '#F5F7FF', '#FFFFFF']} style={StyleSheet.absoluteFill} />
       <View style={styles.blob} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }} // Space for bottom tabs later
-      >
-        {/* --- HEADER SECTION --- */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+        {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.userInfo}>
-            {/* Avatar Placeholder */}
             <Image
-              source={{ uri: userData?.profilePhotoUrl || 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&auto=format&fit=crop&q=60' }}
+              source={{ uri: userData?.profilePhotoUrl || 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400' }}
               style={styles.avatar}
             />
             <View>
               <Text style={styles.dateText}>Thursday, 30 Oct 2025</Text>
               <View style={styles.greetingRow}>
                 <Text style={styles.greetingText}>Good Noon</Text>
-                <Text style={{ fontSize: 18 }}>🌤️</Text>
+                <Text style={{ fontSize: 18 }}>Sunny</Text>
               </View>
             </View>
           </View>
-          
-          {/* Logout Button */}
           <TouchableOpacity style={styles.bellButton} onPress={handleLogout}>
             <LogOut size={24} color="#1E293B" />
           </TouchableOpacity>
         </View>
 
-        {/* --- TOP TABS (Check | Break | Leave) --- */}
+        {/* TABS */}
         <View style={styles.tabContainer}>
-          {['Check', 'Break', 'Leave'].map((tab) => (
+          {['Check',  'Leave'].map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
               onPress={() => handleTabPress(tab as any)}
             >
               {tab === 'Check' && <CheckCircle size={18} color={activeTab === 'Check' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />}
-              {tab === 'Break' && <Coffee size={18} color={activeTab === 'Break' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />}
               {tab === 'Leave' && <LogOut size={18} color={activeTab === 'Leave' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />}
-              
               <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
                 {tab === 'Break' ? 'Break Time' : tab}
               </Text>
@@ -196,24 +176,18 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* --- MAIN STATUS SECTION (Clock & Fingerprint) --- */}
+        {/* STATUS + FINGERPRINT */}
         <View style={styles.statusContainer}>
-          {/* Left Side: Time Info */}
           <View style={styles.timeInfoCard}>
             <View style={styles.timeRow}>
-              <View style={styles.iconBox}>
-                <Clock size={20} color="#5B4BFF" />
-              </View>
+              <View style={styles.iconBox}><Clock size={20} color="#5B4BFF" /></View>
               <View>
                 <Text style={styles.timeLabel}>Check In Time</Text>
                 <Text style={styles.timeValue}>{checkInTime}</Text>
               </View>
             </View>
-
             <View style={[styles.timeRow, { marginTop: 20 }]}>
-               <View style={styles.iconBox}>
-                <Timer size={20} color="#5B4BFF" />
-              </View>
+              <View style={styles.iconBox}><Timer size={20} color="#5B4BFF" /></View>
               <View>
                 <Text style={styles.timeLabel}>Working Time</Text>
                 <Text style={styles.timeValue}>{workedTime}</Text>
@@ -221,38 +195,24 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Right Side: Dynamic Fingerprint Button */}
           <View style={styles.actionCard}>
-            <TouchableOpacity 
-              style={[
-                styles.checkOutButton, 
-                // Change color based on status
-                isCheckedIn ? styles.btnRed : styles.btnBlue 
-              ]} 
-              activeOpacity={0.8}
+            <TouchableOpacity
+              style={[styles.checkOutButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
+              activeOpacity={0.85}
               onPress={handleAttendancePress}
-              disabled={loading} // Disable while sending to backend
+              disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Fingerprint size={40} color="#FFF" />
-                  <Text style={styles.checkOutText}>
-                    {isCheckedIn ? 'Check Out' : 'Check In'}
-                  </Text>
-                </>
-              )}
+              {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
+              <Text style={styles.checkOutText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* --- TODAY TIME LOG (Grid) --- */}
-        <View style={styles.sectionHeader}>
+        {/* TODAY TIME LOG GRID */}
+        {/* <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Today Time Log</Text>
           <Text style={styles.sectionSubtitle}>An Overview Of Your Progress</Text>
         </View>
-
         <View style={styles.statsGrid}>
           {timeLogs.map((item, index) => (
             <View key={index} style={[styles.statCard, { backgroundColor: item.color }]}>
@@ -260,223 +220,248 @@ export default function HomeScreen() {
               <Text style={styles.statLabel}>{item.label}</Text>
             </View>
           ))}
-        </View>
-        
-        {/* --- THIS MONTH CHART --- */}
-        <View style={{ marginTop: 24, paddingHorizontal: 24 }}>
-            <Text style={styles.sectionTitle}>This Month</Text>
-        
-            <View style={styles.chartCard}>
-                <View style={styles.chartHeader}>
-                   <Text style={styles.sectionSubtitle}>Weekly Attendance</Text>
-                   <Text style={styles.workingDaysText}>Working Days: 3</Text>
-                </View>
+        </View> */}
 
-                <View style={styles.chartRow}>
-                    {/* Custom Bar Chart Data */}
-                    {[
-                        { day: 'M', percent: 80 },
-                        { day: 'T', percent: 60 },
-                        { day: 'W', percent: 100 },
-                        { day: 'T', percent: 40 },
-                        { day: 'F', percent: 0 },
-                        { day: 'S', percent: 0 },
-                        { day: 'S', percent: 0 },
-                    ].map((item, index) => (
-                        <View key={index} style={styles.barContainer}>
-                            <View style={styles.barTrack}>
-                                <View style={[
-                                    styles.barFill, 
-                                    { height: `${item.percent}%` }, // Dynamic Height
-                                    item.percent === 0 && { backgroundColor: 'transparent' } // Hide if 0
-                                ]} />
-                            </View>
-                            <Text style={styles.dayLabel}>{item.day}</Text>
-                        </View>
-                    ))}
-                </View>
+ {/* THIS MONTH — PIXEL-PERFECT CHART */}
+<View style={styles.chartSection}>
+  <View style={styles.chartHeader}>
+    <View>
+      <Text style={styles.chartTitle}>This Month</Text>
+      <Text style={styles.chartSubtitle}>Monthly Attendance Overview</Text>
+    </View>
+    <Text style={styles.totalDays}>
+      Total: {employeeStats ? employeeStats.onTimeDays + employeeStats.lateDays + employeeStats.onLeaveDays + employeeStats.absentDays : 0} days
+    </Text>
+  </View>
+
+  <View style={styles.chartContainer}>
+    {employeeStats ? (
+      <View style={styles.barsContainer}>
+        {[
+          { label: 'On Time', value: employeeStats.onTimeDays, color: '#10B981', bg: '#ECFDF5' },
+          { label: 'Late', value: employeeStats.lateDays, color: '#F59E0B', bg: '#FFFBEB' },
+          { label: 'On Leave', value: employeeStats.onLeaveDays, color: '#3B82F6', bg: '#EFF6FF' },
+          { label: 'Absent', value: employeeStats.absentDays, color: '#EF4444', bg: '#FEF2F2' },
+        ].map((item, index) => {
+          const maxValue = Math.max(employeeStats.onTimeDays, employeeStats.lateDays, employeeStats.onLeaveDays, employeeStats.absentDays);
+          const barHeight = maxValue > 0 ? (item.value / maxValue) * 120 : 0; // 120px max height for bars
+          const showBadge = item.value > 0;
+
+          return (
+            <View key={index} style={styles.barItem}>
+              {/* Bar Column */}
+              <View style={styles.barColumn}>
+                {/* Thin base line for zero values */}
+                <View style={styles.baseLine} />
+                
+                {/* Main Bar */}
+                <View style={[styles.bar, { height: barHeight, backgroundColor: item.color }]} />
+                
+             
+              </View>
+
+          
+      
+          Label & Count
+              <Text style={styles.barLabel}>{item.label}</Text>
+              {showBadge && <Text style={styles.barCount}>{item.value} days</Text>}
             </View>
-        </View>
+          );
+        })}
+      </View>
+    ) : (
+      <View style={styles.loadingChart}>
+        <ActivityIndicator size="small" color="#5B4BFF" />
+        <Text style={styles.loadingChartText}>Loading monthly stats...</Text>
+      </View>
+    )}
+  </View>
+</View>
+
 
       </ScrollView>
+
+
     </SafeAreaView>
   );
 }
 
+// ────────────────────────────── STYLES ──────────────────────────────
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  
-  // Background decoration
-  blob: {
-    position: 'absolute',
-    top: -100,
-    right: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: '#5B4BFF10', // Very light purple
-  },
+  blob: { position: 'absolute', top: -100, right: -100, width: 300, height: 300, borderRadius: 150, backgroundColor: '#5B4BFF10' },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    marginBottom: 24,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, marginBottom: 24 },
   userInfo: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12, borderWidth: 2, borderColor: '#FFF' },
   dateText: { fontSize: 13, color: '#64748B', marginBottom: 2 },
   greetingRow: { flexDirection: 'row', alignItems: 'center' },
   greetingText: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginRight: 6 },
-  
-  bellButton: {
-    width: 44, height: 44, backgroundColor: '#FFF', borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2
-  },
-  notificationBadge: {
-    position: 'absolute', top: 8, right: 8, width: 10, height: 10,
-    backgroundColor: '#EF4444', borderRadius: 5, borderWidth: 1.5, borderColor: '#FFF',
-    alignItems: 'center', justifyContent: 'center'
-  },
-  badgeText: { fontSize: 6, color: '#FFF', fontWeight: 'bold', display: 'none' }, // hidden for small dot style
+  bellButton: { width: 44, height: 44, backgroundColor: '#FFF', borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
 
-  // Tabs
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    marginHorizontal: 24,
-    borderRadius: 16,
-    padding: 6,
-    marginBottom: 24,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-  },
-  activeTabButton: {
-    backgroundColor: '#5B4BFF',
-    shadowColor: '#5B4BFF', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4
-  },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#FFF', marginHorizontal: 24, borderRadius: 16, padding: 6, marginBottom: 24, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+  tabButton: { flex: 1, flexDirection: 'row', paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  activeTabButton: { backgroundColor: '#5B4BFF', shadowColor: '#5B4BFF', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   activeTabText: { color: '#FFFFFF' },
 
-  // Status Container (Left Info + Right Fingerprint)
-  statusContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 30,
-    gap: 16,
-  },
-  timeInfoCard: {
-    flex: 1.2,
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 20,
-    justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5,
-  },
+  statusContainer: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 30, gap: 16 },
+  timeInfoCard: { flex: 1.2, backgroundColor: '#FFF', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5 },
   timeRow: { flexDirection: 'row', alignItems: 'center' },
-  iconBox: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9',
-    alignItems: 'center', justifyContent: 'center', marginRight: 12
-  },
+  iconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   timeLabel: { fontSize: 12, color: '#64748B', marginBottom: 2 },
   timeValue: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
 
-  actionCard: {
-    flex: 0.8,
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5,
-  },
-  checkOutButton: {
-    width: 110, height: 110,
-    borderRadius: 55,
-    backgroundColor: '#EF4444', // Red color for Check Out
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#FEF2F2', // Light red border ring
-    shadowColor: '#EF4444', shadowOpacity: 0.4, shadowRadius: 12, elevation: 8
-  },
+  actionCard: { flex: 0.8, backgroundColor: '#FFF', borderRadius: 24, padding: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5 },
+  checkOutButton: { width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center', borderWidth: 4, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
   checkOutText: { color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 8 },
+  btnRed: { backgroundColor: '#EF4444', borderColor: '#FEF2F2', shadowColor: '#EF4444' },
+  btnBlue: { backgroundColor: '#5B4BFF', borderColor: '#E0E7FF', shadowColor: '#5B4BFF' },
 
-  // Stats Section
   sectionHeader: { paddingHorizontal: 24, marginBottom: 16 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
   sectionSubtitle: { fontSize: 13, color: '#64748B', marginTop: 4 },
 
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  statCard: {
-    width: (width - 48 - 24) / 3, // Calculate width for 3 columns
-    paddingVertical: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 24, gap: 12 },
+  statCard: { width: (width - 48 - 24) / 3, paddingVertical: 20, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   statTime: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   statLabel: { fontSize: 11, color: '#64748B', textAlign: 'center' },
 
-  // Chart Section
-  chartCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 20,
-    marginTop: 12,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 4,
-  },
-  chartHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20,
-  },
-  workingDaysText: { fontSize: 12, color: '#64748B', fontWeight: '500' },
-  
-  chartRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120, // Fixed height for the bars area
-  },
-  barContainer: { alignItems: 'center', gap: 8 },
-  barTrack: {
-    width: 12,
-    height: 100, // Max height
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    justifyContent: 'flex-end', // Grow from bottom
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: 10,
-    backgroundColor: '#5B4BFF',
-  },
-  dayLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  // ──────── THIS MONTH CHART – CLEAN & PREMIUM ────────
+// ──────── THIS MONTH CHART – PIXEL-PERFECT & RESPONSIVE ────────
+chartSection: {
+  marginTop: 32,
+  paddingHorizontal: 24,
+},
 
-  // Add these specific button styles
-  btnRed: {
-    backgroundColor: '#EF4444',
-    borderColor: '#FEF2F2',
-    shadowColor: '#EF4444',
-  },
-  btnBlue: {
-    backgroundColor: '#5B4BFF',
-    borderColor: '#E0E7FF',
-    shadowColor: '#5B4BFF',
-  },
+chartHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'flex-end',
+  marginBottom: 24,
+},
+
+chartTitle: {
+  fontSize: 22,
+  fontWeight: '800',
+  color: '#0F172A',
+},
+
+chartSubtitle: {
+  fontSize: 14,
+  color: '#64748B',
+  marginTop: 4,
+},
+
+totalDays: {
+  fontSize: 13,
+  color: '#64748B',
+  fontWeight: '600',
+  backgroundColor: '#F8FAFC',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+},
+
+chartContainer: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 24,
+  padding: 28,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.08,
+  shadowRadius: 20,
+  elevation: 12,
+},
+
+barsContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-evenly',
+  alignItems: 'flex-end',
+  height: 160, // Perfect height for bars + labels
+  paddingBottom: 8,
+},
+
+barItem: {
+  alignItems: 'center',
+  width: 60, // Fixed width per item for even spacing
+},
+
+barColumn: {
+  height: 120, // Max bar height
+  width: 32, // Thin column width
+  justifyContent: 'flex-end',
+  alignItems: 'center',
+  position: 'relative',
+},
+
+baseLine: {
+  height: 2,
+  width: 20,
+  backgroundColor: '#E2E8F0',
+  borderRadius: 1,
+},
+
+bar: {
+  width: 20,
+  borderRadius: 10, // Rounded like screenshot
+  minHeight: 2,
+  marginTop: -1, // Overlap base line slightly
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 3,
+},
+
+badge: {
+  position: 'absolute',
+  top: -32, // Position above bar
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  justifyContent: 'center',
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.25,
+  shadowRadius: 8,
+  elevation: 8,
+},
+
+badgeText: {
+  color: '#FFF',
+  fontSize: 14,
+  fontWeight: '800',
+  textAlign: 'center',
+},
+
+barLabel: {
+  marginTop: 12,
+  fontSize: 12,
+  color: '#64748B',
+  fontWeight: '600',
+  textAlign: 'center',
+  width: 60,
+},
+
+barCount: {
+  marginTop: 4,
+  fontSize: 11,
+  color: '#94A3B8',
+  fontWeight: '500',
+  textAlign: 'center',
+},
+
+loadingChart: {
+  height: 160,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+loadingChartText: {
+  marginTop: 12,
+  fontSize: 14,
+  color: '#94A3B8',
+},
 });
