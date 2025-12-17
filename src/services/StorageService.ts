@@ -97,7 +97,8 @@ export const StorageService = {
       await AsyncStorage.multiRemove([
         config.AUTH.TOKEN_KEY,
         config.AUTH.REFRESH_TOKEN_KEY,
-        'user_data'
+        'user_data',
+        'attendance_session'
       ]);
     } catch (error) {
       console.error('Error clearing data:', error);
@@ -113,6 +114,47 @@ export const StorageService = {
     } catch (error) {
       console.error('Error getting user ID:', error);
       return null;
+    }
+  },
+
+  // Save attendance session data
+  saveAttendanceSession: async (data: {
+    isCheckedIn: boolean;
+    checkInTime: string;
+    checkInTimestamp: string | null;
+    workedTime: string;
+  }): Promise<void> => {
+    try {
+      await AsyncStorage.setItem('attendance_session', JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving attendance session:', error);
+      throw error;
+    }
+  },
+
+  // Get attendance session data
+  getAttendanceSession: async (): Promise<{
+    isCheckedIn: boolean;
+    checkInTime: string;
+    checkInTimestamp: string | null;
+    workedTime: string;
+  } | null> => {
+    try {
+      const data = await AsyncStorage.getItem('attendance_session');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Error getting attendance session:', error);
+      return null;
+    }
+  },
+
+  // Clear attendance session data
+  clearAttendanceSession: async (): Promise<void> => {
+    try {
+      await AsyncStorage.removeItem('attendance_session');
+    } catch (error) {
+      console.error('Error clearing attendance session:', error);
+      throw error;
     }
   }
 };

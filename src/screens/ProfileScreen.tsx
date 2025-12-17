@@ -34,6 +34,7 @@ import { NavigationService } from '../services/NavigationService';
 import { SnackbarService } from '../services/SnackbarService';
 import { AttendanceAPI } from '../api/attendance';
 import { launchImageLibrary } from 'react-native-image-picker';
+import ConfirmLogoutModal from '../components/ConfirmLogoutModal';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -57,6 +58,13 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
+    // open confirmation modal
+    setShowLogoutModal(true);
+  };
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const performLogout = async () => {
     try {
       await StorageService.clearAllData();
       SnackbarService.showSuccess('Logged out successfully');
@@ -64,6 +72,8 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error during logout:', error);
       SnackbarService.showError('Error during logout');
+    } finally {
+      setShowLogoutModal(false);
     }
   };
 
@@ -174,6 +184,12 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <LogOut size={24} color="#1E293B" />
           </TouchableOpacity>
+
+        <ConfirmLogoutModal
+          visible={showLogoutModal}
+          onCancel={() => setShowLogoutModal(false)}
+          onConfirm={performLogout}
+        />
         </View>
 
         {/* Profile Card */}

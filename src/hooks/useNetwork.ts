@@ -22,7 +22,12 @@ export const useNetwork = () => {
 
   return {
     ...networkState,
-    isOnline: networkState.isConnected === true && networkState.isInternetReachable !== false,
+    // When initial state is unknown (isConnected === null) we return `null` for isOnline
+    // so consumers can distinguish "unknown" from explicit offline (false).
+    isOnline:
+      networkState.isConnected === null
+        ? null
+        : networkState.isConnected === true && networkState.isInternetReachable !== false,
   };
 };
 

@@ -29,6 +29,7 @@ import { NavigationService } from '../services/NavigationService';
 import { AuthAPI } from '../api/auth';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService, UserData } from '../services/StorageService';
+import ConfirmLogoutModal from '../components/ConfirmLogoutModal';
 
 export default function SettingsScreen() {
   const [changePasswordModal, setChangePasswordModal] = useState(false);
@@ -54,27 +55,23 @@ export default function SettingsScreen() {
     }
   };
   const handleLogout = async () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await StorageService.clearAllData();
-              SnackbarService.showSuccess('Logged out successfully');
-              NavigationService.navigate('Welcome');
-            } catch (error) {
-              console.error('Error during logout:', error);
-              SnackbarService.showError('Error during logout');
-            }
-          },
-        },
-      ]
-    );
+    // This function is now handled via the confirmation modal
+    setShowLogoutModal(true);
+  };
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const performLogout = async () => {
+    try {
+      await StorageService.clearAllData();
+      SnackbarService.showSuccess('Logged out successfully');
+      NavigationService.navigate('Welcome');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      SnackbarService.showError('Error during logout');
+    } finally {
+      setShowLogoutModal(false);
+    }
   };
 
   const handleChangePassword = async () => {
@@ -194,11 +191,17 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <LogOut size={20} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+          {/* Logout Button */}
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <LogOut size={20} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+
+        <ConfirmLogoutModal
+          visible={showLogoutModal}
+          onCancel={() => setShowLogoutModal(false)}
+          onConfirm={performLogout}
+        />
 
         <View style={{ height: 100 }} />
       </ScrollView>

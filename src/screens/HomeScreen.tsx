@@ -23,6 +23,7 @@ import { SnackbarService } from '../services/SnackbarService';
 import { StorageService, UserData } from '../services/StorageService';
 import { NavigationService } from '../services/NavigationService';
 import { AttendanceAPI } from '../api/attendance';
+import ConfirmLogoutModal from '../components/ConfirmLogoutModal';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +35,7 @@ export default function HomeScreen() {
   const [workedTime, setWorkedTime] = useState('0h 0m');
   const [checkInTimestamp, setCheckInTimestamp] = useState<Date | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [biometricsAvailable, setBiometricsAvailable] = useState<boolean | null>(null);
   const [employeeStats, setEmployeeStats] = useState<{
     onTimeDays: number;
     lateDays: number;
@@ -43,7 +45,18 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadUserData();
+    loadAttendanceSession();
+    checkBiometricsAvailability();
   }, []);
+
+  const checkBiometricsAvailability = async () => {
+    try {
+      const { available } = await AttendanceService.checkAvailability();
+      setBiometricsAvailable(available);
+    } catch (error) {
+      setBiometricsAvailable(false);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -53,6 +66,20 @@ export default function HomeScreen() {
       if (data) await loadEmployeeStats(data._id);
     } catch (error) {
       console.error('Error loading user data:', error);
+    }
+  };
+
+  const loadAttendanceSession = async () => {
+    try {
+      const session = await StorageService.getAttendanceSession();
+      if (session) {
+        setIsCheckedIn(session.isCheckedIn);
+        setCheckInTime(session.checkInTime);
+        setCheckInTimestamp(session.checkInTimestamp ? new Date(session.checkInTimestamp) : null);
+        setWorkedTime(session.workedTime);
+      }
+    } catch (error) {
+      console.error('Error loading attendance session:', error);
     }
   };
 
@@ -86,17 +113,21 @@ export default function HomeScreen() {
   };
 
   const handleAttendancePress = async () => {
-    const { available } = await AttendanceService.checkAvailability();
-    if (!available) {
-      SnackbarService.showError('Biometrics not available on this device');
-      return;
-    }
+    // If biometrics are available, use biometric authentication
+    if (biometricsAvailable) {
+      const { available } = await AttendanceService.checkAvailability();
+      if (!available) {
+        SnackbarService.showError('Biometrics not available on this device');
+        return;
+      }
 
-    const isAuthenticated = await AttendanceService.authenticateUser();
-    if (!isAuthenticated) {
-      SnackbarService.showError("Biometric authentication failed");
-      return;
+      const isAuthenticated = await AttendanceService.authenticateUser();
+      if (!isAuthenticated) {
+        SnackbarService.showError("Biometric authentication failed");
+        return;
+      }
     }
+    // If biometrics are not available, proceed without authentication
 
     setLoading(true);
     try {
@@ -114,18 +145,40 @@ export default function HomeScreen() {
           setIsCheckedIn(true);
           const now = new Date();
           setCheckInTimestamp(now);
-          setCheckInTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          setCheckInTime(formattedTime);
+          
+          // Save to AsyncStorage
+          await StorageService.saveAttendanceSession({
+            isCheckedIn: true,
+            checkInTime: formattedTime,
+            checkInTimestamp: now.toISOString(),
+            workedTime: '0h 0m'
+          });
+          
           SnackbarService.showSuccess(response.message || "Checked In Successfully!");
         } else {
           setIsCheckedIn(false);
+          let calculatedWorkTime = '0h 0m';
+          
           if (checkInTimestamp) {
             const now = new Date();
             const diffMs = now.getTime() - checkInTimestamp.getTime();
             const hours = Math.floor(diffMs / (1000 * 60 * 60));
             const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            setWorkedTime(`${hours}h ${minutes}m`);
+            calculatedWorkTime = `${hours}h ${minutes}m`;
+            setWorkedTime(calculatedWorkTime);
             setCheckInTimestamp(null);
           }
+          
+          // Save to AsyncStorage
+          await StorageService.saveAttendanceSession({
+            isCheckedIn: false,
+            checkInTime: checkInTime,
+            checkInTimestamp: null,
+            workedTime: calculatedWorkTime
+          });
+          
           SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
         }
       } else {
@@ -139,9 +192,23 @@ export default function HomeScreen() {
   };
 
   const handleLogout = async () => {
-    await StorageService.clearAllData();
-    SnackbarService.showSuccess('Logged out successfully');
-    NavigationService.reset([{ name: 'Welcome' }]);
+    setShowLogoutModal(true);
+  };
+
+  const [showLogoutModal, setShowLogoutModal] = React.useState(false);
+
+  const performLogout = async () => {
+    try {
+      await StorageService.clearAllData();
+      await StorageService.clearAttendanceSession();
+      SnackbarService.showSuccess('Logged out successfully');
+      NavigationService.reset([{ name: 'Welcome' }]);
+    } catch (error) {
+      console.error('Error during logout:', error);
+      SnackbarService.showError('Error during logout');
+    } finally {
+      setShowLogoutModal(false);
+    }
   };
 
   return (
@@ -170,6 +237,11 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.bellButton} onPress={handleLogout}>
             <LogOut size={24} color="#1E293B" />
           </TouchableOpacity>
+          <ConfirmLogoutModal
+            visible={showLogoutModal}
+            onCancel={() => setShowLogoutModal(false)}
+            onConfirm={performLogout}
+          />
         </View>
 
         {/* TABS */}
@@ -209,15 +281,34 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.actionCard}>
-            <TouchableOpacity
-              style={[styles.checkOutButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
-              activeOpacity={0.85}
-              onPress={handleAttendancePress}
-              disabled={loading}
-            >
-              {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
-              <Text style={styles.checkOutText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>
-            </TouchableOpacity>
+            {biometricsAvailable === false ? (
+              // Simple Check In/Out button when biometrics not available
+              <TouchableOpacity
+                style={[styles.simpleButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
+                activeOpacity={0.85}
+                onPress={handleAttendancePress}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.simpleButtonText}>
+                    {isCheckedIn ? 'Check Out' : 'Check In'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ) : (
+              // Fingerprint button when biometrics are available
+              <TouchableOpacity
+                style={[styles.checkOutButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
+                activeOpacity={0.85}
+                onPress={handleAttendancePress}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
+                <Text style={styles.checkOutText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -323,9 +414,11 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 12, color: '#64748B', marginBottom: 2 },
   timeValue: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
 
-  actionCard: { flex: 0.8, backgroundColor: '#FFF', borderRadius: 24, padding: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5 },
+  actionCard: { flex: 0.8, backgroundColor: '#FFF', borderRadius: 24, padding: 4, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5, minHeight: 120 },
   checkOutButton: { width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center', borderWidth: 4, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
   checkOutText: { color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 8 },
+  simpleButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 25, alignItems: 'center', justifyContent: 'center', minWidth: 100, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
+  simpleButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   btnRed: { backgroundColor: '#EF4444', borderColor: '#FEF2F2', shadowColor: '#EF4444' },
   btnBlue: { backgroundColor: '#5B4BFF', borderColor: '#E0E7FF', shadowColor: '#5B4BFF' },
 

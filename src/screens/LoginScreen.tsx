@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
+  ScrollView,
   Modal,
   ActivityIndicator,
 } from 'react-native';
@@ -113,7 +114,12 @@ export default function LoginScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.inner}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.inner}>
 
             {/* Engaging Lottie Animation (Same Feel as Welcome) */}
             <View style={styles.lottieContainer}>
@@ -179,7 +185,8 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
             </View>
-          </View>
+            </View>
+          </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 

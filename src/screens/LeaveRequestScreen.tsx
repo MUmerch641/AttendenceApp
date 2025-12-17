@@ -13,6 +13,15 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+
+// Format a Date object to YYYY-MM-DD (API-friendly)
+function formatDate(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import {
@@ -33,8 +42,12 @@ export default function LeaveRequestScreen() {
   const [selectedLeaveType, setSelectedLeaveType] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [startDateObj, setStartDateObj] = useState<Date | undefined>(undefined);
+  const [endDateObj, setEndDateObj] = useState<Date | undefined>(undefined);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Leave types
@@ -48,9 +61,10 @@ export default function LeaveRequestScreen() {
   ];
 
   const calculateLeaveDays = () => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // prefer Date objects if available
+    if ((!startDate && !startDateObj) || (!endDate && !endDateObj)) return 0;
+    const start = startDateObj ? startDateObj : new Date(startDate);
+    const end = endDateObj ? endDateObj : new Date(endDate);
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays;
@@ -183,27 +197,71 @@ export default function LeaveRequestScreen() {
           </View>
 
           <View style={styles.dateContainer}>
-            <View style={styles.dateField}>
+            <TouchableOpacity
+              style={styles.dateField}
+              onPress={() => setShowStartPicker(true)}
+            >
               <Calendar size={20} color="#64748B" />
-              <TextInput
-                style={styles.dateInput}
-                placeholder="Start Date (YYYY-MM-DD)"
-                placeholderTextColor="#94A3B8"
-                value={startDate}
-                onChangeText={setStartDate}
-              />
-            </View>
+              <Text style={styles.dateInput}>
+                {startDateObj ? formatDate(startDateObj) : 'Start Date'}
+              </Text>
+            </TouchableOpacity>
 
-            <View style={styles.dateField}>
+            <TouchableOpacity
+              style={styles.dateField}
+              onPress={() => setShowEndPicker(true)}
+            >
               <Calendar size={20} color="#64748B" />
-              <TextInput
-                style={styles.dateInput}
-                placeholder="End Date (YYYY-MM-DD)"
-                placeholderTextColor="#94A3B8"
-                value={endDate}
-                onChangeText={setEndDate}
+              <Text style={styles.dateInput}>
+                {endDateObj ? formatDate(endDateObj) : 'End Date'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Native DateTimePickers (rendered when requested) */}
+            {showStartPicker && (
+              <DateTimePicker
+                value={startDateObj ?? new Date()}
+                mode="date"
+                display="default"
+                maximumDate={endDateObj ?? undefined}
+                onChange={(event: DateTimePickerEvent, selectedDate?: Date | undefined) => {
+                  setShowStartPicker(false);
+                  // event.type can be 'set' or 'dismissed'
+                  if (event.type === 'dismissed') return;
+                  if (selectedDate) {
+                    setStartDateObj(selectedDate);
+                    setStartDate(formatDate(selectedDate));
+                    // if end is before start, reset end
+                    if (endDateObj && selectedDate > endDateObj) {
+                      setEndDate('');
+                      setEndDateObj(undefined);
+                    }
+                  }
+                }}
               />
-            </View>
+            )}
+
+            {showEndPicker && (
+              <DateTimePicker
+                value={endDateObj ?? (startDateObj ?? new Date())}
+                mode="date"
+                display="default"
+                minimumDate={startDateObj ?? undefined}
+                onChange={(event: DateTimePickerEvent, selectedDate?: Date | undefined) => {
+                  setShowEndPicker(false);
+                  if (event.type === 'dismissed') return;
+                  if (selectedDate) {
+                    setEndDateObj(selectedDate);
+                    setEndDate(formatDate(selectedDate));
+                    // if start is after end, reset start
+                    if (startDateObj && selectedDate < startDateObj) {
+                      setStartDate('');
+                      setStartDateObj(undefined);
+                    }
+                  }
+                }}
+              />
+            )}
           </View>
 
           {startDate && endDate && (

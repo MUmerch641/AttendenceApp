@@ -134,12 +134,26 @@ const AnimatedTabIcon = ({ focused, icon: Icon, label }: { focused: boolean; ico
           },
         ]}
       >
-        <Animated.View style={{ transform: [{ scale }] }}>
+        <Animated.View 
+          style={{ 
+            transform: [{ scale }],
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
           <Icon size={responsiveValues.iconSize} color={focused ? '#FFFFFF' : '#94A3B8'} strokeWidth={2.4} />
         </Animated.View>
 
         {focused && (
-          <Animated.Text style={[styles.label, { opacity, fontSize: responsiveValues.labelFontSize }]}>
+          <Animated.Text 
+            style={[
+              styles.label, 
+              { 
+                opacity, 
+                fontSize: responsiveValues.labelFontSize,
+              }
+            ]}
+          >
             {label}
           </Animated.Text>
         )}
@@ -155,7 +169,13 @@ export default function BottomTabNavigator() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: [styles.tabBar, { height: responsiveValues.tabBarHeight, bottom: responsiveValues.bottom }],
-        tabBarItemStyle: { flex: 1, marginTop: isSmallScreen ? 4 : 8, justifyContent: 'center', alignItems: 'center' },
+        tabBarItemStyle: { 
+          flex: 1, 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          paddingVertical: 0,
+          marginVertical: 0,
+        },
         tabBarActiveTintColor: '#5B4BFF',
         tabBarInactiveTintColor: '#94A3B8',
       }}
@@ -212,16 +232,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconWrapper: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
+    paddingVertical: 4,
   },
   pill: {
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     height: isSmallScreen ? 42 : 48,
     shadowColor: '#5B4BFF',
     shadowOffset: { width: 0, height: 8 },
@@ -231,7 +253,8 @@ const styles = StyleSheet.create({
   label: {
     color: '#FFFFFF',
     fontWeight: '700',
-    marginLeft: 6,
+    marginLeft: 7,
     letterSpacing: 0.3,
+    textAlign: 'center',
   },
 });
