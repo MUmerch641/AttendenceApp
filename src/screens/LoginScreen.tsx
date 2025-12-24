@@ -24,6 +24,8 @@ import { NavigationService } from '../services/NavigationService';
 import { AuthAPI } from '../api/auth';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService } from '../services/StorageService';
+import { NotificationService } from '../services/NotificationService';
+import { Validators } from '../utils/validation';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,14 +39,23 @@ export default function LoginScreen() {
   const [forgotLoading, setForgotLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      SnackbarService.showError('Please fill in all fields');
+    // Validate email
+    const emailValidation = Validators.email(email);
+    if (!emailValidation.isValid) {
+      SnackbarService.showError(emailValidation.error || 'Invalid email');
       return;
     }
+
+    // Validate password
+    const passwordValidation = Validators.password(password);
+    if (!passwordValidation.isValid) {
+      SnackbarService.showError(passwordValidation.error || 'Invalid password');
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await AuthAPI.login({ email, password });
-      console.log('Login Response:', response);
+      const response = await AuthAPI.login({ email: email.trim(), password });
       
       if (response.isSuccess) {
         // Save tokens
@@ -57,14 +68,23 @@ export default function LoginScreen() {
           await StorageService.saveUserData(response.data.userObject);
         }
         
+        // Initialize notifications (this will request permission)
+        try {
+          await NotificationService.initialize();
+        } catch (error) {
+          // Don't block login if notifications fail
+        }
+        
+        // Update authentication state in NavigationService
+        NavigationService.setAuthenticated(true);
+        
         SnackbarService.showSuccess(response.message || 'Login successful!');
-        NavigationService.navigate('Dashboard');
+        NavigationService.reset([{ name: 'Dashboard' }]);
       } else {
         SnackbarService.showError(response.message || 'Login failed');
       }
     } catch (error: any) {
-      console.log('Login Error:', error);
-      const message = error.response?.data?.message || 'Login failed';
+      const message = error.response?.data?.message || 'Login failed. Please check your credentials';
       SnackbarService.showError(message);
     } finally {
       setLoading(false);
@@ -72,14 +92,16 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = async () => {
-    if (!forgotEmail) {
-      SnackbarService.showError('Please enter your email');
+    // Validate email
+    const emailValidation = Validators.email(forgotEmail);
+    if (!emailValidation.isValid) {
+      SnackbarService.showError(emailValidation.error || 'Invalid email');
       return;
     }
 
     setForgotLoading(true);
     try {
-      const response = await AuthAPI.forget({ email: forgotEmail });
+      const response = await AuthAPI.forget({ email: forgotEmail.trim() });
       
       if (response.isSuccess) {
         SnackbarService.showSuccess(response.message || 'Password reset email sent!');
@@ -135,12 +157,11 @@ export default function LoginScreen() {
 
             {/* Logo */}
             <View style={styles.logoContainer}>
-              <Text style={styles.logoPrefix}>Trusted</Text>
-              <Text style={styles.logoMain}>HRM</Text>
+              <Text style={styles.logoMain}>Hourlio</Text>
             </View>
 
             <Text style={styles.title}>Welcome back!</Text>
-            <Text style={styles.subtitle}>Log in to manage your workforce</Text>
+            <Text style={styles.subtitle}>Log in to track your time</Text>
 
             {/* Form Card */}
             <View style={styles.formCard}>
@@ -259,8 +280,7 @@ const styles = StyleSheet.create({
   lottie: { width: '100%', height: '100%' },
 
   logoContainer: { flexDirection: 'row', justifyContent: 'center', marginBottom: 16 },
-  logoPrefix: { fontSize: 36, color: '#5B4BFF', fontWeight: '700' },
-  logoMain: { fontSize: 36, color: '#FF7A00', fontWeight: '900' },
+  logoMain: { fontSize: 42, color: '#5B4BFF', fontWeight: '900', letterSpacing: 1 },
 
   title: { fontSize: 28, fontWeight: '800', color: '#0B1226', textAlign: 'center', marginBottom: 8 },
   subtitle: { fontSize: 16, color: '#64748B', textAlign: 'center', marginBottom: 32 },

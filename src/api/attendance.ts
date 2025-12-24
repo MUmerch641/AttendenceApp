@@ -3,6 +3,14 @@ import { Platform } from 'react-native';
 import config from '../config/app.config';
 import { StorageService } from '../services/StorageService';
 
+/**
+ * Attendance API
+ * 
+ * This file handles attendance, leave, and profile-related API calls.
+ * 
+ * NOTE: For notification-related APIs, use /src/api/notifications.ts
+ */
+
 // Response type for API calls
 export interface ApiResponse {
   isSuccess: boolean;
@@ -36,7 +44,7 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('Error getting token for request:', error);
+      // Error getting token for request
     }
     return config;
   },
@@ -54,19 +62,16 @@ apiClient.interceptors.response.use(
     // Handle network errors
     if (!error.response) {
       // Network error (no response received)
-      console.error('Network Error:', error.message);
       throw new Error('Please check your internet connection and try again.');
     }
 
     // Handle HTTP errors
     if (error.response.status >= 500) {
-      console.error('Server Error:', error.response.status);
       throw new Error('Server is temporarily unavailable. Please try again later.');
     }
 
     // Handle authentication errors
     if (error.response.status === 401) {
-      console.error('Authentication Error');
       // Could trigger logout here if needed
     }
 
@@ -89,6 +94,77 @@ export interface CreateLeavePayload {
   reason: string;
   status: string;
 }
+
+export interface EmployeeSchedule {
+  _id: string;
+  scheduleName: string;
+  timeIn: string;
+  timeOut: string;
+  timeInFlexibility: number;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  __v?: number;
+}
+
+export interface EmployeeDetails {
+  _id: string;
+  fullName: string;
+  guardianName: string;
+  contactNumber: string;
+  officialEmail: string;
+  personalEmail: string;
+  employeeId: string;
+  emergencyContactNumber: string;
+  position: string;
+  profilePhotoUrl?: string;
+  bankAccount: string;
+  scheduleId: EmployeeSchedule;
+  address: string;
+  password: string;
+  role: string;
+  isActive: boolean;
+  customSchedule: any[];
+  createdAt: string;
+  updatedAt: string;
+  __v?: number;
+}
+
+export interface LeaveRequest {
+  _id: string;
+  empDocId: string | EmployeeDetails; // Can be string or populated object
+  leaveType: string;
+  leaves: number;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  isRead?: boolean;
+  status: 'pending' | 'approved' | 'rejected' | 'Pending' | 'Approved' | 'Rejected';
+  createdAt: string;
+  updatedAt: string;
+  __v?: number;
+}
+
+export interface GetLeavesResponse extends ApiResponse {
+  data: {
+    leaves: LeaveRequest[];
+    total: number;
+  };
+}
+
+export interface Notification {
+  _id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type?: 'leave_approved' | 'leave_rejected' | 'leave_pending' | 'announcement' | 'reminder' | 'general';
+  isRead: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  data?: any; // Additional data like leave details
+}
+
+// Removed GetNotificationsResponse - Use notifications.ts API instead
 
 export interface AttendanceReportParams {
   year: number;
@@ -135,53 +211,80 @@ export interface EmployeeStatsResponse extends ApiResponse {
   };
 }
 
+export interface EmployeeReportParams {
+  year: number;
+  month: number;
+  empDocId: string;
+  count?: number;
+  pageNo?: number;
+}
+
+export interface EmployeeReportResponse extends ApiResponse {
+  data: Array<{
+    _id: string;
+    fullName: string;
+    officialEmail: string;
+    position: string;
+    attendance: Array<{
+      _id: string;
+      empId?: string;
+      reason?: string;
+      status?: 'present' | 'late' | 'absent';
+      timeIn?: string;
+      timeOut?: string;
+      empDocId: string;
+      createdAt: string;
+      updatedAt?: string;
+      __v?: number;
+    }>;
+  }>;
+  totalCount: number;
+}
+
 export const AttendanceAPI = {
   create: async (payload: CreateAttendancePayload): Promise<ApiResponse> => {
-    console.log(`🚀 Creating attendance at: ${BASE_URL}/create`);
-    console.log('📦 Payload:', payload);
-
     try {
       // Use apiClient instead of raw axios
       const res = await apiClient.post('/create', payload);
       return res.data;
     } catch (error: any) {
-      console.error('❌ AttendanceAPI Error:', error.message);
       throw error; // Throw it back to the screen to handle
     }
   },
 
   report: async (params: AttendanceReportParams): Promise<AttendanceReportResponse> => {
-    console.log(`🚀 Fetching attendance report from: ${BASE_URL}/report`);
-    console.log('📦 Params:', params);
-
     try {
       // Use apiClient with query parameters
       const res = await apiClient.get('/report', { params });
       return res.data;
     } catch (error: any) {
-      console.error('❌ AttendanceAPI Report Error:', error.message);
       throw error; // Throw it back to the screen to handle
     }
   },
 
   employeeStats: async (params: EmployeeStatsParams): Promise<EmployeeStatsResponse> => {
-    console.log(`🚀 Fetching employee stats from: ${BASE_URL}/employeeStats`);
-    console.log('📦 Params:', params);
-
     try {
       const res = await apiClient.get('/employeeStats', { params });
       return res.data;
     } catch (error: any) {
-      console.error('❌ AttendanceAPI EmployeeStats Error:', error.message);
       throw error;
     }
   },
 
-  uploadProfilePic: async (imageAsset: any): Promise<ApiResponse> => {
+  reportsByEmployee: async (params: EmployeeReportParams): Promise<EmployeeReportResponse> => {
+    const { empDocId, ...queryParams } = params;
+    const endpoint = `/reportsByEmployId/${empDocId}`;
+
+    try {
+      const res = await apiClient.get(endpoint, { params: queryParams });
+      return res.data;
+    } catch (error: any) {
+      throw error;
+    }
+  },  uploadProfilePic: async (imageAsset: any): Promise<ApiResponse> => {
     const userBaseUrl = `${API_DOMAIN}/attendance-api/user`;
     const url = `${userBaseUrl}/uploadProfilePic`;
 
-    console.log('� Preparing Upload to:', url);
 
     try {
       const token = await StorageService.getAccessToken();
@@ -198,8 +301,6 @@ export const AttendanceAPI = {
         name: imageAsset.fileName || `profile_${Date.now()}.jpg`, // Name is MANDATORY
       } as any);
 
-      console.log('📦 FormData Created. Sending...');
-
       // 3. Send Request with proper headers
       const response = await axios.post(url, formData, {
         headers: {
@@ -213,22 +314,15 @@ export const AttendanceAPI = {
         timeout: 30000, // Longer timeout for file uploads
       });
 
-      console.log('✅ Upload Success:', response.data);
       return response.data;
 
     } catch (error: any) {
-      console.error('❌ Upload Error Details:', error.message);
-      if (error.response) {
-        console.error('Server Response:', error.response.data);
-      }
       throw error;
     }
   },
 
   createLeave: async (payload: CreateLeavePayload): Promise<ApiResponse> => {
     const leaveBaseUrl = `${API_DOMAIN}/attendance-api/leave-management`;
-    console.log(`🚀 Creating leave request at: ${leaveBaseUrl}/create`);
-    console.log('📦 Payload:', payload);
 
     try {
       const token = await StorageService.getAccessToken();
@@ -240,10 +334,116 @@ export const AttendanceAPI = {
         },
         timeout: 15000,
       });
-      return res.data;
+      
+      // Return properly formatted response
+      return {
+        isSuccess: true,
+        message: res.data?.message || 'Leave request submitted successfully',
+        data: res.data,
+      };
     } catch (error: any) {
-      console.error('❌ Create Leave Error:', error.message);
-      throw error;
+      // Return error as ApiResponse
+      return {
+        isSuccess: false,
+        message: error.response?.data?.message || error.message || 'Failed to create leave request',
+        data: error.response?.data,
+      };
+    }
+  },
+
+  getLeaves: async (params?: { status?: string; pageNo?: number; count?: number }): Promise<GetLeavesResponse> => {
+    const leaveBaseUrl = `${API_DOMAIN}/attendance-api/leave-management`;
+    
+    try {
+      const token = await StorageService.getAccessToken();
+      const queryParams = new URLSearchParams();
+      
+      if (params?.status) queryParams.append('status', params.status);
+      if (params?.pageNo) queryParams.append('pageNo', params.pageNo.toString());
+      if (params?.count) queryParams.append('count', params.count.toString());
+      
+      const url = queryParams.toString() 
+        ? `${leaveBaseUrl}/getLeaves?${queryParams.toString()}`
+        : `${leaveBaseUrl}/getLeaves`;
+      
+      const res = await axios.get(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        timeout: 15000,
+      });
+      
+      
+      return {
+        isSuccess: true,
+        message: 'Leaves fetched successfully',
+        data: {
+          leaves: res.data?.data?.leaves || res.data?.leaves || [],
+          total: res.data?.data?.total || res.data?.total || 0,
+        },
+      };
+    } catch (error: any) {
+      return {
+        isSuccess: false,
+        message: error.response?.data?.message || error.message || 'Failed to fetch leave requests',
+        data: {
+          leaves: [],
+          total: 0,
+        },
+      };
+    }
+  },
+
+  getAllLeavesByUserId: async (userId: string): Promise<GetLeavesResponse> => {
+    const leaveBaseUrl = `${API_DOMAIN}/attendance-api/leave-management`;
+    const endpoint = `${leaveBaseUrl}/getAllByUserId/${userId}`;
+
+    try {
+      const token = await StorageService.getAccessToken();
+      
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      const res = await axios.get(endpoint, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        timeout: 15000,
+      });
+      
+   
+      // Handle the actual response format: data is an array directly
+      const leaves = Array.isArray(res.data?.data) 
+        ? res.data.data 
+        : Array.isArray(res.data) 
+        ? res.data 
+        : [];
+      
+      const total = leaves.length;
+      
+      
+      return {
+        isSuccess: res.data?.isSuccess !== false, // Default to true if not specified
+        message: res.data?.message || 'Leaves fetched successfully',
+        data: {
+          leaves: leaves,
+          total: total,
+        },
+      };
+    } catch (error: any) {
+      return {
+        isSuccess: false,
+        message: error.response?.data?.message || error.message || 'Failed to fetch leave requests',
+        data: {
+          leaves: [],
+          total: 0,
+        },
+      };
     }
   },
 
@@ -251,8 +451,6 @@ export const AttendanceAPI = {
   uploadProfilePicFetch: async (imageAsset: any): Promise<ApiResponse> => {
     const userBaseUrl = `${API_DOMAIN}/attendance-api/user`;
     const url = `${userBaseUrl}/uploadProfilePic`;
-
-    console.log('🚀 Preparing Fetch Upload to:', url);
 
     try {
       const token = await StorageService.getAccessToken();
@@ -279,11 +477,9 @@ export const AttendanceAPI = {
         throw new Error(JSON.stringify(json));
       }
 
-      console.log('✅ Fetch Upload Success:', json);
       return json;
 
     } catch (error: any) {
-      console.error('❌ Fetch Upload Error:', error);
       throw error;
     }
   },

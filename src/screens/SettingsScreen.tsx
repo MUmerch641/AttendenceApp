@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ScrollView,
   Alert,
   Modal,
@@ -26,10 +25,12 @@ import {
   X,
 } from 'lucide-react-native';
 import { NavigationService } from '../services/NavigationService';
+import { NotificationService } from '../services/NotificationService';
 import { AuthAPI } from '../api/auth';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService, UserData } from '../services/StorageService';
 import ConfirmLogoutModal from '../components/ConfirmLogoutModal';
+import { ProfileImageService } from '../services/ProfileImageService';
 
 export default function SettingsScreen() {
   const [changePasswordModal, setChangePasswordModal] = useState(false);
@@ -44,6 +45,21 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadUserData();
+
+    // Listen for profile image updates
+    const unsubscribe = ProfileImageService.onProfileImageUpdate((newImageUrl) => {
+      setUserData((prevUserData) => {
+        if (prevUserData) {
+          return { ...prevUserData, profilePhotoUrl: newImageUrl };
+        }
+        return prevUserData;
+      });
+    });
+
+    // Cleanup listener on unmount
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const loadUserData = async () => {
@@ -51,7 +67,6 @@ export default function SettingsScreen() {
       const data = await StorageService.getUserData();
       setUserData(data);
     } catch (error) {
-      console.error('Error loading user data:', error);
     }
   };
   const handleLogout = async () => {
@@ -63,11 +78,15 @@ export default function SettingsScreen() {
 
   const performLogout = async () => {
     try {
+      // Clear FCM token from backend and device
+      await NotificationService.deleteToken();
+      
+      // Clear all local data
       await StorageService.clearAllData();
+      
       SnackbarService.showSuccess('Logged out successfully');
       NavigationService.navigate('Welcome');
     } catch (error) {
-      console.error('Error during logout:', error);
       SnackbarService.showError('Error during logout');
     } finally {
       setShowLogoutModal(false);
@@ -109,7 +128,6 @@ export default function SettingsScreen() {
         SnackbarService.showError(response.message || 'Failed to change password');
       }
     } catch (error: any) {
-      console.error('Change password error:', error);
       SnackbarService.showError('Failed to change password');
     } finally {
       setLoading(false);
@@ -130,18 +148,10 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: userData?.profilePhotoUrl || 'https://randomuser.me/api/portraits/men/86.jpg' }}
-              style={styles.avatar}
-            />
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.name}>{userData?.fullName || 'Staff Member'}</Text>
-            <Text style={styles.email}>{userData?.officialEmail || 'staff@example.com'}</Text>
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerSubtitle}>Manage your account preferences</Text>
         </View>
 
         {/* Settings List */}
@@ -357,38 +367,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF7A0018',
   },
 
-  profileHeader: {
-    alignItems: 'center',
-    paddingVertical: 32,
+  header: {
     paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
   },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 15,
-  },
-
-  profileInfo: {
-    alignItems: 'center',
-  },
-  name: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 32,
     fontWeight: '800',
     color: '#0B1226',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
-  email: {
+  headerSubtitle: {
     fontSize: 15,
     color: '#64748B',
     fontWeight: '500',

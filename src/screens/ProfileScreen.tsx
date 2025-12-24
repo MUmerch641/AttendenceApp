@@ -6,13 +6,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Platform,
   ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
+import FastImage from 'react-native-fast-image';
 import {
   Mail,
   Phone,
@@ -28,18 +28,24 @@ import {
   Camera,
   Star,
   LogOut,
+  User,
 } from 'lucide-react-native';
 import { StorageService, UserData } from '../services/StorageService';
 import { NavigationService } from '../services/NavigationService';
+import { NotificationService } from '../services/NotificationService';
 import { SnackbarService } from '../services/SnackbarService';
 import { AttendanceAPI } from '../api/attendance';
 import { launchImageLibrary } from 'react-native-image-picker';
 import ConfirmLogoutModal from '../components/ConfirmLogoutModal';
+import ImagePreviewModal from '../components/ImagePreviewModal';
+import { ProfileImageService } from '../services/ProfileImageService';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -50,7 +56,6 @@ export default function ProfileScreen() {
       const data = await StorageService.getUserData();
       setUserData(data);
     } catch (error) {
-      console.error('Error loading user data:', error);
       SnackbarService.showError('Failed to load user data');
     } finally {
       setLoading(false);
@@ -62,15 +67,17 @@ export default function ProfileScreen() {
     setShowLogoutModal(true);
   };
 
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-
   const performLogout = async () => {
     try {
+      // Clear FCM token from backend and device
+      await NotificationService.deleteToken();
+      
+      // Clear all local data
       await StorageService.clearAllData();
+      
       SnackbarService.showSuccess('Logged out successfully');
       NavigationService.navigate('Welcome');
     } catch (error) {
-      console.error('Error during logout:', error);
       SnackbarService.showError('Error during logout');
     } finally {
       setShowLogoutModal(false);
@@ -92,14 +99,12 @@ export default function ProfileScreen() {
       }
 
       if (response.errorMessage) {
-        console.error('ImagePicker Error: ', response.errorMessage);
         SnackbarService.showError('Failed to select image');
         return;
       }
 
       if (response.assets && response.assets[0]) {
         const asset = response.assets[0];
-        console.log('Selected image:', asset);
 
         try {
           setUploading(true);
@@ -117,25 +122,14 @@ export default function ProfileScreen() {
               const updatedUserData = { ...userData!, profilePhotoUrl };
               setUserData(updatedUserData);
               await StorageService.saveUserData(updatedUserData);
-            }
-          } else {
-            SnackbarService.showError(result.message || 'Failed to upload profile picture');
-          }
-
-          if (result.isSuccess) {
-            SnackbarService.showSuccess('Profile picture updated successfully!');
-
-            // Update local user data with new profile photo URL if returned
-            if (result.data?.profilePhotoUrl) {
-              const updatedUserData = { ...userData!, profilePhotoUrl: result.data.profilePhotoUrl };
-              setUserData(updatedUserData);
-              await StorageService.saveUserData(updatedUserData);
+              
+              // Emit event to notify other screens about the profile image update
+              ProfileImageService.emitProfileImageUpdate(profilePhotoUrl);
             }
           } else {
             SnackbarService.showError(result.message || 'Failed to upload profile picture');
           }
         } catch (error: any) {
-          console.error('Upload error:', error);
           SnackbarService.showError('Failed to upload profile picture');
         } finally {
           setUploading(false);
@@ -194,16 +188,30 @@ export default function ProfileScreen() {
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: userData.profilePhotoUrl || 'https://randomuser.me/api/portraits/men/32.jpg' }}
-              style={styles.avatar}
-            />
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={() => userData.profilePhotoUrl && setShowImagePreview(true)}
+            activeOpacity={userData.profilePhotoUrl ? 0.7 : 1}
+          >
+            {userData.profilePhotoUrl ? (
+              <FastImage
+                source={{ 
+                  uri: userData.profilePhotoUrl,
+                  priority: FastImage.priority.high,
+                }}
+                style={styles.avatar}
+                resizeMode={FastImage.resizeMode.cover}
+              />
+            ) : (
+              <View style={styles.defaultAvatar}>
+                <User size={60} color="#94A3B8" strokeWidth={1.5} />
+              </View>
+            )}
             <View style={styles.ratingBadge}>
               <Star size={14} color="#FFD700" fill="#FFD700" />
               <Text style={styles.ratingText}>75%</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.infoContainer}>
             <Text style={styles.name}>{userData.fullName}</Text>
@@ -257,6 +265,13 @@ export default function ProfileScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        visible={showImagePreview}
+        imageUri={userData?.profilePhotoUrl || null}
+        onClose={() => setShowImagePreview(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -379,6 +394,16 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 4,
     borderColor: '#FFF',
+  },
+  defaultAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: '#FFF',
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   ratingBadge: {
     position: 'absolute',

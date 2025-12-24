@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "852785649030",
+    "project_id": "attendence-app-65cb5",
+    "storage_bucket": "attendence-app-65cb5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:852785649030:android:277d1b4f6308ec4bb2c807",
+        "android_client_info": {
+          "package_name": "com.Hourlio.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBo-EyWFIZ3QgV8WTvadhuYwb6Hr20Vo9M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

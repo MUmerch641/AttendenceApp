@@ -3,6 +3,9 @@ import { RootStackParamList } from '../../App';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
+// Create a ref to store authentication state that can be accessed outside React components
+export const authStateRef = { current: false };
+
 export const NavigationService = {
   navigate: (name: keyof RootStackParamList, params?: any) => {
     if (navigationRef.isReady()) {
@@ -27,5 +30,15 @@ export const NavigationService = {
       return navigationRef.getCurrentRoute();
     }
     return null;
+  },
+  
+  // Update authentication state
+  setAuthenticated: (isAuthenticated: boolean) => {
+    authStateRef.current = isAuthenticated;
+  },
+  
+  // Get authentication state
+  isAuthenticated: () => {
+    return authStateRef.current;
   },
 };

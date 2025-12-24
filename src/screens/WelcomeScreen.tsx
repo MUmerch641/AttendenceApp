@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 import { NavigationService } from '../services/NavigationService';
+import { StorageService } from '../services/StorageService';
 
 
 
@@ -23,6 +24,13 @@ const { width, height } = Dimensions.get('window');
 type WelcomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
   
 export default function WelcomeScreen() {
+  
+  const handleGetStarted = async () => {
+    // Mark that user has seen the welcome screen
+    await StorageService.setWelcomeSeen();
+    NavigationService.navigate('LoginScreen');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -43,8 +51,7 @@ export default function WelcomeScreen() {
 
       {/* Logo Section */}
       <View style={styles.logoContainer}>
-        <Text style={styles.logoPrefix}>Trusted</Text>
-        <Text style={styles.logoMain}>HRM</Text>
+        <Text style={styles.logoMain}>Hourlio</Text>
       </View>
 
       {/* Illustration Section */}
@@ -65,7 +72,7 @@ export default function WelcomeScreen() {
         <Text style={styles.title}>
           Smart HR solutions for a{"\n"}smarter workplace.
         </Text>
-        <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={() => NavigationService.navigate('LoginScreen')}>
+        <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={handleGetStarted}>
           <Text style={styles.buttonText}>Get Started →</Text>
         </TouchableOpacity>
       </View>
@@ -112,15 +119,11 @@ const styles = StyleSheet.create({
     marginTop: Platform.OS === 'ios' ? 30 : 50,
     zIndex: 10,
   },
-  logoPrefix: {
-    fontSize: 36,
-    color: '#5B4BFF',
-    fontWeight: '700',
-  },
   logoMain: {
-    fontSize: 36,
-    color: '#FF7A00',
+    fontSize: 42,
+    color: '#5B4BFF',
     fontWeight: '900',
+    letterSpacing: 1,
   },
 
   illustrationContainer: {

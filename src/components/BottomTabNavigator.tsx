@@ -1,183 +1,132 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, FileText, Settings, User } from 'lucide-react-native';
-import HomeScreen from '../screens/HomeScreen';   
-import ProfileScreen from '../screens/ProfileScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+"use client"
 
-const Tab = createBottomTabNavigator();
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+import { useEffect, useRef } from "react"
+import { View, StyleSheet, Animated, Platform } from "react-native"
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { Home, FileText, Settings, User } from "lucide-react-native"
+import HomeScreen from "../screens/HomeScreen"
+import ProfileScreen from "../screens/ProfileScreen"
+import HistoryScreen from "../screens/HistoryScreen"
+import SettingsScreen from "../screens/SettingsScreen"
 
-// <CHANGE> Calculate responsive values based on screen dimensions
-const isSmallScreen = screenWidth < 375;
-const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
-const isLargeScreen = screenWidth >= 414;
+const Tab = createBottomTabNavigator()
 
-const getResponsiveValues = () => {
-  if (isSmallScreen) {
-    return {
-      tabBarHeight: 64,
-      iconSize: 20,
-      pillWidth: 48,
-      expandedPillWidth: 95,
-      bottom: 16,
-      horizontalPadding: 12,
-      labelFontSize: 11,
-    };
-  } else if (isMediumScreen) {
-    return {
-      tabBarHeight: 70,
-      iconSize: 22,
-      pillWidth: 50,
-      expandedPillWidth: 105,
-      bottom: 20,
-      horizontalPadding: 14,
-      labelFontSize: 12,
-    };
-  } else {
-    return {
-      tabBarHeight: 74,
-      iconSize: 24,
-      pillWidth: 52,
-      expandedPillWidth: 110,
-      bottom: 24,
-      horizontalPadding: 16,
-      labelFontSize: 13.5,
-    };
-  }
-};
-
-const responsiveValues = getResponsiveValues();
-
-const PlaceholderScreen = ({ name }: { name: string }) => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F6F8FF' }}>
-    <Text style={{ color: '#64748B', fontSize: 20, fontWeight: '700' }}>{name}</Text>
-  </View>
-);
-
-// <CHANGE> Improved AnimatedTabIcon with responsive sizing
 const AnimatedTabIcon = ({ focused, icon: Icon, label }: { focused: boolean; icon: any; label: string }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const bgOpacity = useRef(new Animated.Value(0)).current;
-  const pillWidth = useRef(new Animated.Value(responsiveValues.pillWidth)).current;
+  const iconTranslateY = useRef(new Animated.Value(0)).current
+  const labelOpacity = useRef(new Animated.Value(0)).current
+  const scale = useRef(new Animated.Value(1)).current
 
   useEffect(() => {
     if (focused) {
+      // When focused: icon moves up, label fades in, icon scales up
       Animated.parallel([
+        Animated.spring(iconTranslateY, {
+          toValue: -8,
+          friction: 6,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(labelOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
         Animated.spring(scale, {
           toValue: 1.15,
           friction: 6,
-          tension: 110,
+          tension: 40,
           useNativeDriver: true,
         }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bgOpacity, {
-          toValue: 1,
-          duration: 320,
-          useNativeDriver: false,
-        }),
-        Animated.timing(pillWidth, {
-          toValue: responsiveValues.expandedPillWidth,
-          duration: 320,
-          useNativeDriver: false,
-        }),
-      ]).start();
+      ]).start()
     } else {
+      // When unfocused: icon returns to center, label fades out, icon scales down
       Animated.parallel([
+        Animated.spring(iconTranslateY, {
+          toValue: 0,
+          friction: 6,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(labelOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
         Animated.spring(scale, {
           toValue: 1,
-          friction: 8,
-          tension: 120,
+          friction: 6,
+          tension: 40,
           useNativeDriver: true,
         }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bgOpacity, {
-          toValue: 0,
-          duration: 280,
-          useNativeDriver: false,
-        }),
-        Animated.timing(pillWidth, {
-          toValue: responsiveValues.pillWidth,
-          duration: 280,
-          useNativeDriver: false,
-        }),
-      ]).start();
+      ]).start()
     }
-  }, [focused]);
+  }, [focused, iconTranslateY, labelOpacity, scale])
 
   return (
-    <View style={styles.iconWrapper}>
-      <Animated.View
-        style={[
-          styles.pill,
-          {
-            width: pillWidth,
-            backgroundColor: bgOpacity.interpolate({
-              inputRange: [0, 1],
-              outputRange: ['transparent', '#5B4BFF'],
-            }),
-            shadowOpacity: bgOpacity.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.35],
-            }),
-          },
-        ]}
-      >
+    <View style={styles.tabItemContainer}>
+      <View style={styles.contentWrapper}>
         <Animated.View 
-          style={{ 
-            transform: [{ scale }],
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
+          style={[
+            styles.iconWrapper, 
+            { 
+              transform: [{ translateY: iconTranslateY }, { scale }] 
+            }
+          ]}
         >
-          <Icon size={responsiveValues.iconSize} color={focused ? '#FFFFFF' : '#94A3B8'} strokeWidth={2.4} />
+          <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+            <Icon size={22} color={focused ? "#FFFFFF" : "#64748B"} strokeWidth={2.2} />
+          </View>
         </Animated.View>
-
         {focused && (
-          <Animated.Text 
+          <Animated.Text
             style={[
-              styles.label, 
-              { 
-                opacity, 
-                fontSize: responsiveValues.labelFontSize,
-              }
+              styles.tabLabel,
+              {
+                opacity: labelOpacity,
+              },
             ]}
+            numberOfLines={1}
+            ellipsizeMode="clip"
           >
             {label}
           </Animated.Text>
         )}
-      </Animated.View>
+      </View>
     </View>
-  );
-};
+  )
+}
 
 export default function BottomTabNavigator() {
+  const insets = useSafeAreaInsets()
+  
+  // Calculate bottom spacing: use inset if available, otherwise use default spacing
+  const bottomSpacing = Platform.select({
+    ios: Math.max(insets.bottom, 20),
+    android: Math.max(insets.bottom + 10, 20),
+  })
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
-        tabBarStyle: [styles.tabBar, { height: responsiveValues.tabBarHeight, bottom: responsiveValues.bottom }],
-        tabBarItemStyle: { 
-          flex: 1, 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          paddingVertical: 0,
-          marginVertical: 0,
-        },
-        tabBarActiveTintColor: '#5B4BFF',
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            bottom: bottomSpacing,
+          },
+        ],
+        tabBarBackground: () => (
+          <View style={styles.tabBarBackground}>
+            <View style={styles.tabBarOverlay} />
+          </View>
+        ),
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarActiveTintColor: "#5B4BFF",
+        tabBarInactiveTintColor: "#64748B",
+        tabBarHideOnKeyboard: true,
+        lazy: false,
       }}
     >
       <Tab.Screen
@@ -209,52 +158,101 @@ export default function BottomTabNavigator() {
         }}
       />
     </Tab.Navigator>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    position: 'absolute',
-    left: responsiveValues.horizontalPadding,
-    right: responsiveValues.horizontalPadding,
-    borderRadius: 37,
-    backgroundColor: '#FFFFFF',
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 20,
+    height: 65,
+    borderRadius: 20,
     borderTopWidth: 0,
-    elevation: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 15 },
-    shadowOpacity: 0.15,
-    shadowRadius: 25,
-    paddingHorizontal: 6,
-    paddingTop: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    elevation: 0,
+    shadowOpacity: 0,
+    backgroundColor: "transparent",
+    paddingBottom: 0,
+  },
+  tabBarBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  tabBarOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderRadius: 20,
+  },
+  tabBarItem: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 0,
+    marginVertical: 0,
+    height: 65,
+  },
+  tabItemContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+    position: "relative",
+  },
+  contentWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: "100%",
+    minWidth: 80,
   },
   iconWrapper: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  pill: {
-    borderRadius: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    height: isSmallScreen ? 42 : 48,
-    shadowColor: '#5B4BFF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 15,
+  iconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
   },
-  label: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    marginLeft: 7,
-    letterSpacing: 0.3,
-    textAlign: 'center',
+  iconContainerActive: {
+    backgroundColor: "#5B4BFF",
+    shadowColor: "#5B4BFF",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-});
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#5B4BFF",
+    textAlign: "center",
+    letterSpacing: 0.2,
+    marginTop: 4,
+  },
+})

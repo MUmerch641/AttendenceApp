@@ -14,6 +14,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../../App';
 
 // Format a Date object to YYYY-MM-DD (API-friendly)
 function formatDate(d: Date) {
@@ -31,13 +34,18 @@ import {
   Check,
   AlertCircle,
   X,
+  History,
 } from 'lucide-react-native';
 import { NavigationService } from '../services/NavigationService';
 import { AttendanceAPI } from '../api/attendance';
 import { StorageService } from '../services/StorageService';
 import { SnackbarService } from '../services/SnackbarService';
+import { useSmoothBackHandler } from '../hooks/useSmoothBackHandler';
+
+type LeaveRequestNavigationProp = StackNavigationProp<RootStackParamList, 'LeaveRequest'>;
 
 export default function LeaveRequestScreen() {
+  const navigation = useNavigation<LeaveRequestNavigationProp>();
   const [reason, setReason] = useState('');
   const [selectedLeaveType, setSelectedLeaveType] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -48,6 +56,9 @@ export default function LeaveRequestScreen() {
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+
+  // Handle Android back button smoothly
+  useSmoothBackHandler();
   const [loading, setLoading] = useState(false);
 
   // Leave types
@@ -109,12 +120,11 @@ export default function LeaveRequestScreen() {
 
       if (response.isSuccess) {
         SnackbarService.showSuccess('Leave request submitted successfully!');
-        NavigationService.goBack();
+        navigation.goBack();
       } else {
         SnackbarService.showError(response.message || 'Failed to submit leave request');
       }
     } catch (error) {
-      console.error('Leave submission error:', error);
       SnackbarService.showError('Failed to submit leave request');
     } finally {
       setLoading(false);
@@ -130,9 +140,9 @@ export default function LeaveRequestScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Leave Type</Text>
-                <TouchableOpacity onPress={() => setShowLeaveTypeModal(false)}>
+                {/* <TouchableOpacity onPress={() => setShowLeaveTypeModal(false)}>
                   <X size={24} color="#64748B" />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
 
               {leaveTypes.map((type) => (
@@ -168,10 +178,19 @@ export default function LeaveRequestScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => NavigationService.goBack()}>
-            <X size={24} color="#1E293B" />
-          </TouchableOpacity>
           <Text style={styles.headerTitle}>Apply for Leave</Text>
+          <TouchableOpacity 
+            style={styles.statusButton} 
+            onPress={() => navigation.navigate('LeaveStatus')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={['#FFFFFF', '#F5F3FF']}
+              style={styles.statusButtonGradient}
+            >
+              <History size={20} color="#5B4BFF" />
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
         {/* Leave Type Section */}
@@ -382,25 +401,36 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginHorizontal: 24,
     marginTop: 20,
     marginBottom: 20,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFF',
+  statusButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    shadowColor: '#5B4BFF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  statusButtonGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: '#E8E5FF',
   },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0B1226' },
+  headerTitle: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: '#0B1226',
+    flex: 1,
+  },
 
   section: { marginHorizontal: 24, marginBottom: 28 },
 

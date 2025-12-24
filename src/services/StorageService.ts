@@ -34,7 +34,6 @@ export const StorageService = {
       await AsyncStorage.setItem(config.AUTH.TOKEN_KEY, tokens.accessToken);
       await AsyncStorage.setItem(config.AUTH.REFRESH_TOKEN_KEY, tokens.refreshToken);
     } catch (error) {
-      console.error('Error saving tokens:', error);
       throw error;
     }
   },
@@ -44,7 +43,6 @@ export const StorageService = {
     try {
       return await AsyncStorage.getItem(config.AUTH.TOKEN_KEY);
     } catch (error) {
-      console.error('Error getting access token:', error);
       return null;
     }
   },
@@ -54,7 +52,6 @@ export const StorageService = {
     try {
       return await AsyncStorage.getItem(config.AUTH.REFRESH_TOKEN_KEY);
     } catch (error) {
-      console.error('Error getting refresh token:', error);
       return null;
     }
   },
@@ -64,7 +61,6 @@ export const StorageService = {
     try {
       await AsyncStorage.setItem('user_data', JSON.stringify(userData));
     } catch (error) {
-      console.error('Error saving user data:', error);
       throw error;
     }
   },
@@ -75,7 +71,6 @@ export const StorageService = {
       const userData = await AsyncStorage.getItem('user_data');
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
-      console.error('Error getting user data:', error);
       return null;
     }
   },
@@ -86,22 +81,22 @@ export const StorageService = {
       const token = await StorageService.getAccessToken();
       return token !== null;
     } catch (error) {
-      console.error('Error checking login status:', error);
       return false;
     }
   },
 
   // Clear all stored data (logout)
+  // NOTE: Does NOT clear 'has_seen_welcome' flag so welcome screen only shows on first install
   clearAllData: async (): Promise<void> => {
     try {
       await AsyncStorage.multiRemove([
         config.AUTH.TOKEN_KEY,
         config.AUTH.REFRESH_TOKEN_KEY,
         'user_data',
-        'attendance_session'
+        'attendance_session',
+        'fcm_token'
       ]);
     } catch (error) {
-      console.error('Error clearing data:', error);
       throw error;
     }
   },
@@ -112,7 +107,6 @@ export const StorageService = {
       const userData = await StorageService.getUserData();
       return userData?._id || null;
     } catch (error) {
-      console.error('Error getting user ID:', error);
       return null;
     }
   },
@@ -127,7 +121,6 @@ export const StorageService = {
     try {
       await AsyncStorage.setItem('attendance_session', JSON.stringify(data));
     } catch (error) {
-      console.error('Error saving attendance session:', error);
       throw error;
     }
   },
@@ -143,7 +136,6 @@ export const StorageService = {
       const data = await AsyncStorage.getItem('attendance_session');
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      console.error('Error getting attendance session:', error);
       return null;
     }
   },
@@ -153,10 +145,55 @@ export const StorageService = {
     try {
       await AsyncStorage.removeItem('attendance_session');
     } catch (error) {
-      console.error('Error clearing attendance session:', error);
       throw error;
     }
-  }
+  },
+
+  // Save FCM token
+  saveFCMToken: async (token: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem('fcm_token', token);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get FCM token
+  getFCMToken: async (): Promise<string | null> => {
+    try {
+      return await AsyncStorage.getItem('fcm_token');
+    } catch (error) {
+      return null;
+    }
+  },
+
+  // Clear FCM token
+  clearFCMToken: async (): Promise<void> => {
+    try {
+      await AsyncStorage.removeItem('fcm_token');
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Check if this is the first time the app is opened
+  isFirstTimeUser: async (): Promise<boolean> => {
+    try {
+      const hasSeenWelcome = await AsyncStorage.getItem('has_seen_welcome');
+      return hasSeenWelcome === null;
+    } catch (error) {
+      return true; // Default to showing welcome on error
+    }
+  },
+
+  // Mark that the user has seen the welcome screen
+  setWelcomeSeen: async (): Promise<void> => {
+    try {
+      await AsyncStorage.setItem('has_seen_welcome', 'true');
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 
 export default StorageService;

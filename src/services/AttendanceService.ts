@@ -26,7 +26,6 @@ export const AttendanceService = {
       });
       return success;
     } catch (error) {
-      console.error('Biometric failed', error);
       return false;
     }
   },
@@ -42,7 +41,6 @@ export const AttendanceService = {
         // location: { lat: ..., long: ... } 
       };
 
-      console.log('🚀 Sending to Backend:', payload);
 
       // UNCOMMENT THIS WHEN YOU HAVE A REAL SERVER
       const response = await axios.post(`${API_URL}/attendance/mark`, payload, {
@@ -72,7 +70,6 @@ export const AttendanceService = {
       // });
 
     } catch (error: any) {
-      console.error('API Error', error);
       const message = error.response?.data?.message || `${type} failed`;
       SnackbarService.showError(message);
       throw error;

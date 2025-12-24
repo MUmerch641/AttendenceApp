@@ -36,7 +36,6 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('Error getting token for request:', error);
     }
     return config;
   },
@@ -70,15 +69,12 @@ export interface VerifyOtpPayload {
 
 export const AuthAPI = {
   login: async (payload: LoginPayload): Promise<ApiResponse> => {
-    console.log(`🚀 Logging in to: ${BASE_URL}/login`);
-    console.log('📦 Payload:', payload);
     
     try {
       // Use apiClient instead of raw axios
       const res = await apiClient.post('/login', payload);
       return res.data;
     } catch (error: any) {
-      console.error('❌ AuthAPI Error:', error.message);
       throw error; // Throw it back to the screen to handle
     }
   },

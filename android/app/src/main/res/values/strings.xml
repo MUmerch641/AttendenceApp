@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">attendenceApp</string>
+    <string name="app_name">Hourlio</string>
+    <string name="default_notification_channel_id">attendance_notifications</string>
+    <string name="default_notification_channel_name">Hourlio Notifications</string>
 </resources>
