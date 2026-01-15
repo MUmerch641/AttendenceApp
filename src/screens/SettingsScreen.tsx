@@ -78,17 +78,30 @@ export default function SettingsScreen() {
 
   const performLogout = async () => {
     try {
+      setShowLogoutModal(false);
+
       // Clear FCM token from backend and device
       await NotificationService.deleteToken();
-      
-      // Clear all local data
+
+      // Clear all local data FIRST before changing auth state
       await StorageService.clearAllData();
-      
-      SnackbarService.showSuccess('Logged out successfully');
-      NavigationService.navigate('Welcome');
+      await StorageService.clearAttendanceSession();
+
+      // Update authentication state AFTER clearing data
+      NavigationService.setAuthenticated(false);
+
+      // Larger delay to ensure state is propagated before navigation
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 200));
+
+      // Reset navigation to LoginScreen with index 0
+      NavigationService.reset([{ name: 'LoginScreen' }]);
+
+      // Show success after navigation attempt
+      setTimeout(() => {
+        SnackbarService.showSuccess('Logged out successfully');
+      }, 100);
     } catch (error) {
       SnackbarService.showError('Error during logout');
-    } finally {
       setShowLogoutModal(false);
     }
   };
@@ -112,7 +125,7 @@ export default function SettingsScreen() {
 
     setLoading(true);
     try {
-      const response = await AuthAPI.changePassword({ newPassword });
+      const response = await AuthAPI.changePassword({ newPassword, currentPassword });
 
       if (response.isSuccess) {
         // Close modal first, then show success message
@@ -201,11 +214,11 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-          {/* Logout Button */}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <LogOut size={20} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <LogOut size={20} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
 
         <ConfirmLogoutModal
           visible={showLogoutModal}

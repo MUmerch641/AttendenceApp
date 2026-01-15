@@ -28,7 +28,7 @@ const BASE_URL = `${API_DOMAIN}${ATTENDANCE_PATH}`;
 // 2. Create an Axios Instance (Best Practice)
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000, 
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -83,6 +83,9 @@ apiClient.interceptors.response.use(
 export interface CreateAttendancePayload {
   empId: string;
   reason: string;
+  latitude: number;
+  longitude: number;
+  ipAddress?: string;
 }
 
 export interface CreateLeavePayload {
@@ -121,7 +124,6 @@ export interface EmployeeDetails {
   bankAccount: string;
   scheduleId: EmployeeSchedule;
   address: string;
-  password: string;
   role: string;
   isActive: boolean;
   customSchedule: any[];
@@ -281,7 +283,7 @@ export const AttendanceAPI = {
     } catch (error: any) {
       throw error;
     }
-  },  uploadProfilePic: async (imageAsset: any): Promise<ApiResponse> => {
+  }, uploadProfilePic: async (imageAsset: any): Promise<ApiResponse> => {
     const userBaseUrl = `${API_DOMAIN}/attendance-api/user`;
     const url = `${userBaseUrl}/uploadProfilePic`;
 
@@ -334,7 +336,7 @@ export const AttendanceAPI = {
         },
         timeout: 15000,
       });
-      
+
       // Return properly formatted response
       return {
         isSuccess: true,
@@ -353,19 +355,19 @@ export const AttendanceAPI = {
 
   getLeaves: async (params?: { status?: string; pageNo?: number; count?: number }): Promise<GetLeavesResponse> => {
     const leaveBaseUrl = `${API_DOMAIN}/attendance-api/leave-management`;
-    
+
     try {
       const token = await StorageService.getAccessToken();
       const queryParams = new URLSearchParams();
-      
+
       if (params?.status) queryParams.append('status', params.status);
       if (params?.pageNo) queryParams.append('pageNo', params.pageNo.toString());
       if (params?.count) queryParams.append('count', params.count.toString());
-      
-      const url = queryParams.toString() 
+
+      const url = queryParams.toString()
         ? `${leaveBaseUrl}/getLeaves?${queryParams.toString()}`
         : `${leaveBaseUrl}/getLeaves`;
-      
+
       const res = await axios.get(url, {
         headers: {
           'Content-Type': 'application/json',
@@ -374,8 +376,8 @@ export const AttendanceAPI = {
         },
         timeout: 15000,
       });
-      
-      
+
+
       return {
         isSuccess: true,
         message: 'Leaves fetched successfully',
@@ -402,7 +404,7 @@ export const AttendanceAPI = {
 
     try {
       const token = await StorageService.getAccessToken();
-      
+
       if (!token) {
         throw new Error('Authentication required');
       }
@@ -415,18 +417,18 @@ export const AttendanceAPI = {
         },
         timeout: 15000,
       });
-      
-   
+
+
       // Handle the actual response format: data is an array directly
-      const leaves = Array.isArray(res.data?.data) 
-        ? res.data.data 
-        : Array.isArray(res.data) 
-        ? res.data 
-        : [];
-      
+      const leaves = Array.isArray(res.data?.data)
+        ? res.data.data
+        : Array.isArray(res.data)
+          ? res.data
+          : [];
+
       const total = leaves.length;
-      
-      
+
+
       return {
         isSuccess: res.data?.isSuccess !== false, // Default to true if not specified
         message: res.data?.message || 'Leaves fetched successfully',

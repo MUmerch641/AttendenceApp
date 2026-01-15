@@ -35,7 +35,7 @@ interface ConfigType {
 
 const config: ConfigType = {
   API: {
-    BASE_URL: 'https://attendance.curelogics.org',
+    BASE_URL: 'https://leohours.pakhims.com',
   },
   AUTH: {
     TOKEN_KEY: 'auth_token',
@@ -53,7 +53,7 @@ const config: ConfigType = {
   },
   FEATURES: {
     BIOMETRIC_ATTENDANCE: true,
-    LOCATION_TRACKING: false,
+    LOCATION_TRACKING: true,
     OFFLINE_MODE: false,
   },
   UI: {

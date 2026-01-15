@@ -1,5 +1,5 @@
 // src/screens/LeaveRequestScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
@@ -60,6 +61,55 @@ export default function LeaveRequestScreen() {
   // Handle Android back button smoothly
   useSmoothBackHandler();
   const [loading, setLoading] = useState(false);
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const headerSlide = useRef(new Animated.Value(-30)).current;
+  const formSlide1 = useRef(new Animated.Value(50)).current;
+  const formSlide2 = useRef(new Animated.Value(50)).current;
+  const formSlide3 = useRef(new Animated.Value(50)).current;
+  const buttonScale = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(headerSlide, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(formSlide1, {
+        toValue: 0,
+        duration: 600,
+        delay: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(formSlide2, {
+        toValue: 0,
+        duration: 600,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(formSlide3, {
+        toValue: 0,
+        duration: 600,
+        delay: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(buttonScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        delay: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // Leave types
   const leaveTypes = [
@@ -177,7 +227,13 @@ export default function LeaveRequestScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Header */}
-        <View style={styles.header}>
+        <Animated.View style={[
+          styles.header,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: headerSlide }],
+          }
+        ]}>
           <Text style={styles.headerTitle}>Apply for Leave</Text>
           <TouchableOpacity 
             style={styles.statusButton} 
@@ -191,10 +247,16 @@ export default function LeaveRequestScreen() {
               <History size={20} color="#5B4BFF" />
             </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Leave Type Section */}
-        <View style={styles.section}>
+        <Animated.View style={[
+          styles.section,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: formSlide1 }],
+          }
+        ]}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Leave Type</Text>
             <Text style={styles.required}>*</Text>
@@ -206,10 +268,16 @@ export default function LeaveRequestScreen() {
             </Text>
             <ChevronDown size={22} color="#64748B" />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Date Selection */}
-        <View style={styles.section}>
+        <Animated.View style={[
+          styles.section,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: formSlide2 }],
+          }
+        ]}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Duration</Text>
             <Text style={styles.required}>*</Text>
@@ -288,10 +356,16 @@ export default function LeaveRequestScreen() {
               <Text style={styles.daysText}>Total Days: {calculateLeaveDays()}</Text>
             </View>
           )}
-        </View>
+        </Animated.View>
 
         {/* Reason Section */}
-        <View style={styles.section}>
+        <Animated.View style={[
+          styles.section,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: formSlide3 }],
+          }
+        ]}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Reason</Text>
             <Text style={styles.required}>*</Text>
@@ -319,12 +393,17 @@ export default function LeaveRequestScreen() {
               <Text style={styles.successText}>Reason added</Text>
             </View>
           )}
-        </View>
+        </Animated.View>
 
         {/* Submit Button */}
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitText}>Submit Now</Text>
-        </TouchableOpacity>
+        <Animated.View style={{
+          opacity: fadeAnim,
+          transform: [{ scale: buttonScale }],
+        }}>
+          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <Text style={styles.submitText}>Submit Now</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
 
       {/* Leave Type Modal */}

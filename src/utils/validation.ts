@@ -33,8 +33,19 @@ export const Validators = {
       return { isValid: false, error: 'Password is required' };
     }
 
-    if (password.length < 6) {
-      return { isValid: false, error: 'Password must be at least 6 characters long' };
+    if (password.length < 8) {
+      return { isValid: false, error: 'Password must be at least 8 characters long' };
+    }
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+
+    if (!(hasUpperCase && hasLowerCase && hasNumber)) {
+      return {
+        isValid: false,
+        error: 'Password must contain uppercase, lowercase, and numbers'
+      };
     }
 
     return { isValid: true };

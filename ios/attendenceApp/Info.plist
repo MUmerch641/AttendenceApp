@@ -35,7 +35,7 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Hourlio needs access to your location to mark attendance. Your location is required to verify check-in and check-out.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to allow you to change your profile picture.</string>
 	<key>UILaunchStoryboardName</key>

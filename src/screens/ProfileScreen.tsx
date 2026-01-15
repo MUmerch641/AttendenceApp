@@ -69,17 +69,30 @@ export default function ProfileScreen() {
 
   const performLogout = async () => {
     try {
+      setShowLogoutModal(false);
+
       // Clear FCM token from backend and device
       await NotificationService.deleteToken();
-      
-      // Clear all local data
+
+      // Clear all local data FIRST before changing auth state
       await StorageService.clearAllData();
-      
-      SnackbarService.showSuccess('Logged out successfully');
-      NavigationService.navigate('Welcome');
+      await StorageService.clearAttendanceSession();
+
+      // Update authentication state AFTER clearing data
+      NavigationService.setAuthenticated(false);
+
+      // Larger delay to ensure state is propagated before navigation
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 200));
+
+      // Reset navigation to LoginScreen with index 0
+      NavigationService.reset([{ name: 'LoginScreen' }]);
+
+      // Show success after navigation attempt
+      setTimeout(() => {
+        SnackbarService.showSuccess('Logged out successfully');
+      }, 100);
     } catch (error) {
       SnackbarService.showError('Error during logout');
-    } finally {
       setShowLogoutModal(false);
     }
   };
@@ -122,7 +135,7 @@ export default function ProfileScreen() {
               const updatedUserData = { ...userData!, profilePhotoUrl };
               setUserData(updatedUserData);
               await StorageService.saveUserData(updatedUserData);
-              
+
               // Emit event to notify other screens about the profile image update
               ProfileImageService.emitProfileImageUpdate(profilePhotoUrl);
             }
@@ -179,23 +192,23 @@ export default function ProfileScreen() {
             <LogOut size={24} color="#1E293B" />
           </TouchableOpacity>
 
-        <ConfirmLogoutModal
-          visible={showLogoutModal}
-          onCancel={() => setShowLogoutModal(false)}
-          onConfirm={performLogout}
-        />
+          <ConfirmLogoutModal
+            visible={showLogoutModal}
+            onCancel={() => setShowLogoutModal(false)}
+            onConfirm={performLogout}
+          />
         </View>
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.avatarContainer}
             onPress={() => userData.profilePhotoUrl && setShowImagePreview(true)}
             activeOpacity={userData.profilePhotoUrl ? 0.7 : 1}
           >
             {userData.profilePhotoUrl ? (
               <FastImage
-                source={{ 
+                source={{
                   uri: userData.profilePhotoUrl,
                   priority: FastImage.priority.high,
                 }}

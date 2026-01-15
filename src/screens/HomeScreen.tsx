@@ -10,6 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -24,6 +25,8 @@ import { AttendanceService } from '../services/AttendanceService';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService, UserData } from '../services/StorageService';
 import { NavigationService } from '../services/NavigationService';
+import { LocationService } from '../services/LocationService';
+import { IpService } from '../services/IpService';
 import { NotificationService } from '../services/NotificationService';
 import { NotificationsAPI } from '../api/notifications';
 import { AttendanceAPI } from '../api/attendance';
@@ -56,6 +59,39 @@ export default function HomeScreen() {
   // Animation values
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const profileSlide = useRef(new Animated.Value(-50)).current;
+  const cardSlide = useRef(new Animated.Value(50)).current;
+  const statsSlide = useRef(new Animated.Value(50)).current;
+
+  // Entrance animations
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(profileSlide, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardSlide, {
+        toValue: 0,
+        duration: 700,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(statsSlide, {
+        toValue: 0,
+        duration: 700,
+        delay: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // Pulsing animation for check-in button
   useEffect(() => {
@@ -184,7 +220,7 @@ export default function HomeScreen() {
       }
 
       const response = await NotificationsAPI.getUnreadCount(userId);
-      
+
       if (response.isSuccess && response.data) {
         const count = response.data.count || 0;
         setUnreadNotificationCount(count);
@@ -257,13 +293,60 @@ export default function HomeScreen() {
 
     setLoading(true);
     try {
+      // Check for location consent
+      const hasConsented = await StorageService.hasSeenLocationConsent();
+      if (!hasConsented) {
+        setLoading(false);
+        Alert.alert(
+          'Location Tracking Required',
+          'To mark attendance, we need to access your location to verify you are at the correct work site. Your location is only recorded during Check-In and Check-Out.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'I Understand',
+              onPress: async () => {
+                await StorageService.setLocationConsentSeen();
+                handleAttendancePress(); // Retry automatically
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      // Get user's current location first
+      const locationResult = await LocationService.getCurrentLocation();
+
+      if (!locationResult.success || !locationResult.coordinates) {
+        SnackbarService.showError(locationResult.error || 'Unable to get your location. Please enable location services.');
+        setLoading(false);
+        return;
+      }
+
+      const { latitude, longitude } = locationResult.coordinates;
+
+      // Get IP Address (Optional - don't block if fails)
+      const ipAddress = await IpService.getPublicIp();
+
       const user = await StorageService.getUserData();
-      if (!user) return SnackbarService.showError('User data not found');
+      if (!user) {
+        SnackbarService.showError('User data not found');
+        setLoading(false);
+        return;
+      }
 
       const payload = {
         empId: user.employeeId,
-        reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN'
+        reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN',
+        latitude,
+        longitude,
+        ipAddress: ipAddress || undefined,
       };
+console.log("ipAddress",ipAddress)
+      console.log("payload",payload)
 
       const response = await AttendanceAPI.create(payload);
       if (response.isSuccess) {
@@ -274,7 +357,7 @@ export default function HomeScreen() {
           const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           setCheckInTime(formattedTime);
           setWorkedTime('0h 0m'); // Reset worked time to 0h 0m on check-in
-          
+
           // Save to AsyncStorage
           await StorageService.saveAttendanceSession({
             isCheckedIn: true,
@@ -282,12 +365,12 @@ export default function HomeScreen() {
             checkInTimestamp: now.toISOString(),
             workedTime: '0h 0m'
           });
-          
+
           SnackbarService.showSuccess(response.message || "Checked In Successfully!");
         } else {
           setIsCheckedIn(false);
           let calculatedWorkTime = '0h 0m';
-          
+
           if (checkInTimestamp) {
             const now = new Date();
             const diffMs = now.getTime() - checkInTimestamp.getTime();
@@ -297,7 +380,7 @@ export default function HomeScreen() {
             setWorkedTime(calculatedWorkTime);
             setCheckInTimestamp(null);
           }
-          
+
           // Save to AsyncStorage
           await StorageService.saveAttendanceSession({
             isCheckedIn: false,
@@ -305,7 +388,7 @@ export default function HomeScreen() {
             checkInTimestamp: null,
             workedTime: calculatedWorkTime
           });
-          
+
           SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
         }
       } else {
@@ -319,30 +402,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    setShowLogoutModal(true);
-  };
 
-  const performLogout = async () => {
-    try {
-      // Clear FCM token from backend and device
-      await NotificationService.deleteToken();
-      
-      // Clear all local data
-      await StorageService.clearAllData();
-      await StorageService.clearAttendanceSession();
-      
-      // Update authentication state
-      NavigationService.setAuthenticated(false);
-      
-      SnackbarService.showSuccess('Logged out successfully');
-      NavigationService.reset([{ name: 'LoginScreen' }]);
-    } catch (error) {
-      SnackbarService.showError('Error during logout');
-    } finally {
-      setShowLogoutModal(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -351,16 +411,23 @@ export default function HomeScreen() {
       <View style={styles.blob} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        <View style={styles.header}>
+        {/* Animated Header */}
+        <Animated.View style={[
+          styles.header,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: profileSlide }],
+          }
+        ]}>
           <View style={styles.userInfo}>
-          
-            <TouchableOpacity 
+
+            <TouchableOpacity
               onPress={() => userData?.profilePhotoUrl && setShowImagePreview(true)}
               activeOpacity={userData?.profilePhotoUrl ? 0.7 : 1}
             >
               {userData?.profilePhotoUrl ? (
                 <FastImage
-                  source={{ 
+                  source={{
                     uri: userData.profilePhotoUrl,
                     priority: FastImage.priority.high,
                   }}
@@ -381,8 +448,8 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.bellButton} 
+          <TouchableOpacity
+            style={styles.bellButton}
             onPress={() => NavigationService.navigate('Notifications')}
           >
             <Bell size={24} color="#1E293B" />
@@ -394,11 +461,17 @@ export default function HomeScreen() {
               </View>
             )}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* TABS */}
-        <View style={styles.tabContainer}>
-          {['Check',  'Leave'].map((tab) => (
+        <Animated.View style={[
+          styles.tabContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: cardSlide }],
+          }
+        ]}>
+          {['Check', 'Leave'].map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
@@ -411,10 +484,16 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </Animated.View>
 
         {/* STATUS + FINGERPRINT */}
-        <View style={styles.statusContainer}>
+        <Animated.View style={[
+          styles.statusContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: cardSlide }],
+          }
+        ]}>
           <View style={styles.timeInfoCard}>
             <View style={styles.timeRow}>
               <View style={styles.iconBox}><Clock size={20} color="#5B4BFF" /></View>
@@ -476,7 +555,7 @@ export default function HomeScreen() {
               </Animated.View>
             )}
           </View>
-        </View>
+        </Animated.View>
 
         {/* TODAY TIME LOG GRID */}
         {/* <View style={styles.sectionHeader}>
@@ -492,56 +571,62 @@ export default function HomeScreen() {
           ))}
         </View> */}
 
- {/* THIS MONTH — PIXEL-PERFECT CHART */}
-<View style={styles.chartSection}>
-  <View style={styles.chartHeader}>
-    <View>
-      <Text style={styles.chartTitle}>This Month</Text>
-      <Text style={styles.chartSubtitle}>Monthly Attendance Overview</Text>
-    </View>
-    <Text style={styles.totalDays}>
-      Total: {employeeStats ? employeeStats.onTimeDays + employeeStats.lateDays + employeeStats.onLeaveDays + employeeStats.absentDays : 0} days
-    </Text>
-  </View>
-
-  <View style={styles.chartContainer}>
-    {employeeStats ? (
-      <View style={styles.barsContainer}>
-        {[
-          { label: 'On Time', value: employeeStats.onTimeDays, color: '#10B981' },
-          { label: 'Late', value: employeeStats.lateDays, color: '#F59E0B' },
-          { label: 'On Leave', value: employeeStats.onLeaveDays, color: '#3B82F6' },
-          { label: 'Absent', value: employeeStats.absentDays, color: '#EF4444' },
-        ].map((item, index) => {
-          const maxValue = Math.max(
-            employeeStats.onTimeDays, 
-            employeeStats.lateDays, 
-            employeeStats.onLeaveDays, 
-            employeeStats.absentDays,
-            1 // Minimum to prevent division by zero
-          );
-          const barHeight = item.value > 0 ? Math.max((item.value / maxValue) * 140, 8) : 8;
-
-          return (
-            <View key={index} style={styles.barItem}>
-              {/* Bar with rounded corners */}
-              <View style={[styles.bar, { height: barHeight, backgroundColor: item.color }]} />
-              
-              {/* Label & Count */}
-              <Text style={styles.barLabel}>{item.label}</Text>
-              {item.value > 0 && <Text style={styles.barCount}>{item.value} days</Text>}
+        {/* THIS MONTH — PIXEL-PERFECT CHART */}
+        <Animated.View style={[
+          styles.chartSection,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: statsSlide }],
+          }
+        ]}>
+          <View style={styles.chartHeader}>
+            <View>
+              <Text style={styles.chartTitle}>This Month</Text>
+              <Text style={styles.chartSubtitle}>Monthly Attendance Overview</Text>
             </View>
-          );
-        })}
-      </View>
-    ) : (
-      <View style={styles.loadingChart}>
-        <ActivityIndicator size="small" color="#5B4BFF" />
-        <Text style={styles.loadingChartText}>Loading monthly stats...</Text>
-      </View>
-    )}
-  </View>
-</View>
+            <Text style={styles.totalDays}>
+              Total: {employeeStats ? employeeStats.onTimeDays + employeeStats.lateDays + employeeStats.onLeaveDays + employeeStats.absentDays : 0} days
+            </Text>
+          </View>
+
+          <View style={styles.chartContainer}>
+            {employeeStats ? (
+              <View style={styles.barsContainer}>
+                {[
+                  { label: 'On Time', value: employeeStats.onTimeDays, color: '#10B981' },
+                  { label: 'Late', value: employeeStats.lateDays, color: '#F59E0B' },
+                  { label: 'On Leave', value: employeeStats.onLeaveDays, color: '#3B82F6' },
+                  { label: 'Absent', value: employeeStats.absentDays, color: '#EF4444' },
+                ].map((item, index) => {
+                  const maxValue = Math.max(
+                    employeeStats.onTimeDays,
+                    employeeStats.lateDays,
+                    employeeStats.onLeaveDays,
+                    employeeStats.absentDays,
+                    1 // Minimum to prevent division by zero
+                  );
+                  const barHeight = item.value > 0 ? Math.max((item.value / maxValue) * 140, 8) : 8;
+
+                  return (
+                    <View key={index} style={styles.barItem}>
+                      {/* Bar with rounded corners */}
+                      <View style={[styles.bar, { height: barHeight, backgroundColor: item.color }]} />
+
+                      {/* Label & Count */}
+                      <Text style={styles.barLabel}>{item.label}</Text>
+                      {item.value > 0 && <Text style={styles.barCount}>{item.value} days</Text>}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={styles.loadingChart}>
+                <ActivityIndicator size="small" color="#5B4BFF" />
+                <Text style={styles.loadingChartText}>Loading monthly stats...</Text>
+              </View>
+            )}
+          </View>
+        </Animated.View>
 
 
       </ScrollView>
@@ -565,12 +650,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, marginBottom: 24 },
   userInfo: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12, borderWidth: 2, borderColor: '#FFF' },
-  defaultAvatar: { 
-    width: 50, 
-    height: 50, 
-    borderRadius: 25, 
-    marginRight: 12, 
-    borderWidth: 2, 
+  defaultAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    borderWidth: 2,
     borderColor: '#FFF',
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
@@ -579,16 +664,16 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 13, color: '#64748B', marginBottom: 2 },
   greetingRow: { flexDirection: 'row', alignItems: 'center' },
   greetingText: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginRight: 6 },
-  bellButton: { 
-    width: 44, 
-    height: 44, 
-    backgroundColor: '#FFF', 
-    borderRadius: 14, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    shadowColor: '#000', 
-    shadowOpacity: 0.05, 
-    shadowRadius: 10, 
+  bellButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 2,
     position: 'relative',
   },
@@ -625,10 +710,10 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 12, color: '#64748B', marginBottom: 2 },
   timeValue: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
 
-  actionContainer: { 
-    flex: 0.8, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  actionContainer: {
+    flex: 0.8,
+    alignItems: 'center',
+    justifyContent: 'center',
     minHeight: 120,
     position: 'relative',
   },
@@ -642,27 +727,27 @@ const styles = StyleSheet.create({
     marginLeft: -70,
     marginTop: -70,
   },
-  checkOutButton: { 
-    width: 110, 
-    height: 110, 
-    borderRadius: 55, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 4, 
-    shadowOpacity: 0.5, 
-    shadowRadius: 16, 
+  checkOutButton: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
     elevation: 10,
   },
   checkOutText: { color: '#FFF', fontSize: 12, fontWeight: '600', marginTop: 8 },
-  simpleButton: { 
-    paddingHorizontal: 28, 
-    paddingVertical: 16, 
-    borderRadius: 30, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    minWidth: 110, 
-    shadowOpacity: 0.5, 
-    shadowRadius: 12, 
+  simpleButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 110,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
     elevation: 8,
   },
   simpleButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
@@ -679,99 +764,99 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: '#64748B', textAlign: 'center' },
 
   // ──────── THIS MONTH CHART – CLEAN & PREMIUM ────────
-// ──────── THIS MONTH CHART – PIXEL-PERFECT & RESPONSIVE ────────
-chartSection: {
-  marginTop: 32,
-  paddingHorizontal: 24,
-},
+  // ──────── THIS MONTH CHART – PIXEL-PERFECT & RESPONSIVE ────────
+  chartSection: {
+    marginTop: 32,
+    paddingHorizontal: 24,
+  },
 
-chartHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'flex-end',
-  marginBottom: 24,
-},
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 24,
+  },
 
-chartTitle: {
-  fontSize: 22,
-  fontWeight: '800',
-  color: '#0F172A',
-},
+  chartTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
 
-chartSubtitle: {
-  fontSize: 14,
-  color: '#64748B',
-  marginTop: 4,
-},
+  chartSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    marginTop: 4,
+  },
 
-totalDays: {
-  fontSize: 13,
-  color: '#64748B',
-  fontWeight: '600',
-  backgroundColor: '#F8FAFC',
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  borderRadius: 20,
-},
+  totalDays: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
 
-chartContainer: {
-  backgroundColor: '#FFFFFF',
-  borderRadius: 24,
-  padding: 28,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.08,
-  shadowRadius: 20,
-  elevation: 12,
-},
+  chartContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 12,
+  },
 
-barsContainer: {
-  flexDirection: 'row',
-  justifyContent: 'space-evenly',
-  alignItems: 'flex-end',
-  height: 200,
-  paddingBottom: 12,
-  gap: 8,
-},
+  barsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'flex-end',
+    height: 200,
+    paddingBottom: 12,
+    gap: 8,
+  },
 
-barItem: {
-  alignItems: 'center',
-  flex: 1,
-  justifyContent: 'flex-end',
-},
+  barItem: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
 
-bar: {
-  width: 28,
-  borderTopLeftRadius: 14,
-  borderTopRightRadius: 14,
-  minHeight: 8,
-},
+  bar: {
+    width: 28,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    minHeight: 8,
+  },
 
-barLabel: {
-  fontSize: 12,
-  color: '#64748B',
-  fontWeight: '600',
-  textAlign: 'center',
-  marginTop: 12,
-  marginBottom: 4,
-},
+  barLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
 
-barCount: {
-  fontSize: 11,
-  color: '#94A3B8',
-  fontWeight: '500',
-  textAlign: 'center',
-},
+  barCount: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
 
-loadingChart: {
-  height: 200,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
+  loadingChart: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-loadingChartText: {
-  marginTop: 12,
-  fontSize: 14,
-  color: '#94A3B8',
-},
+  loadingChartText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#94A3B8',
+  },
 });

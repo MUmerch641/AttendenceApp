@@ -187,9 +187,29 @@ export const StorageService = {
   },
 
   // Mark that the user has seen the welcome screen
+  // Mark that the user has seen the welcome screen
   setWelcomeSeen: async (): Promise<void> => {
     try {
       await AsyncStorage.setItem('has_seen_welcome', 'true');
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Check if user has consented to location usage
+  hasSeenLocationConsent: async (): Promise<boolean> => {
+    try {
+      const seen = await AsyncStorage.getItem('location_consent_seen');
+      return seen === 'true';
+    } catch (error) {
+      return false;
+    }
+  },
+
+  // Mark location consent as seen
+  setLocationConsentSeen: async (): Promise<void> => {
+    try {
+      await AsyncStorage.setItem('location_consent_seen', 'true');
     } catch (error) {
       throw error;
     }

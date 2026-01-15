@@ -26,7 +26,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 export type RootStackParamList = {
   Welcome: undefined;
   LoginScreen: undefined;
-  Dashboard: undefined; 
+  Dashboard: undefined;
   LeaveRequest: undefined;
   LeaveStatus: undefined;
   Notifications: undefined;
@@ -45,22 +45,22 @@ function App() {
 
   // Define protected routes (require authentication)
   const protectedRoutes = ['Dashboard', 'LeaveRequest', 'LeaveStatus', 'Notifications'];
-  
+
   // Define public routes (no authentication required)
   const publicRoutes = ['Welcome', 'LoginScreen', 'PrivacyPolicy', 'SupportPolicy', 'TermsConditions'];
 
   useEffect(() => {
     // Setup axios interceptors for global error handling
     setupAxiosInterceptors();
-    
+
     const checkAuthentication = async () => {
       try {
         const loggedIn = await StorageService.isLoggedIn();
         const isFirstTime = await StorageService.isFirstTimeUser();
-        
+
         setIsAuthenticated(loggedIn);
         authStateRef.current = loggedIn; // Update the shared ref
-        
+
         // Determine initial route
         let route: keyof RootStackParamList;
         if (loggedIn) {
@@ -70,9 +70,9 @@ function App() {
         } else {
           route = 'LoginScreen';
         }
-        
+
         setInitialRoute(route);
-        
+
         // Initialize FCM notifications if user is authenticated
         if (loggedIn) {
           try {
@@ -92,16 +92,32 @@ function App() {
     checkAuthentication();
   }, []);
 
+  // Sync isAuthenticated state with authStateRef
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (authStateRef.current !== isAuthenticated) {
+        setIsAuthenticated(authStateRef.current);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
   // Navigation state change listener to enforce route protection
   const onNavigationStateChange = async (state: NavigationState | undefined) => {
     if (!state) return;
 
     const currentRoute = state.routes[state.index];
     const currentRouteName = currentRoute.name;
-    
+
+    // Don't interfere if we're already on LoginScreen and auth is false (logout scenario)
+    if (currentRouteName === 'LoginScreen' && !authStateRef.current) {
+      return;
+    }
+
     // Check if user is trying to access a protected route without authentication
     if (protectedRoutes.includes(currentRouteName) && !authStateRef.current) {
-  
+
       // Redirect to LoginScreen (not Welcome, since they're not first-time users)
       if (navigationRef.isReady()) {
         navigationRef.reset({
@@ -114,7 +130,7 @@ function App() {
 
     // Check if authenticated user is trying to access login/welcome screens
     if ((currentRouteName === 'LoginScreen' || currentRouteName === 'Welcome') && authStateRef.current) {
-   
+
       // Redirect to Dashboard
       if (navigationRef.isReady()) {
         navigationRef.reset({
@@ -138,17 +154,17 @@ function App() {
   return (
     <ErrorBoundary>
       <NetworkProvider>
-        <NavigationContainer 
+        <NavigationContainer
           ref={navigationRef}
           onStateChange={onNavigationStateChange}
         >
           <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-          <Stack.Navigator 
-            initialRouteName={initialRoute} 
-            screenOptions={{ 
+          <Stack.Navigator
+            initialRouteName={initialRoute}
+            screenOptions={{
               headerShown: false,
               // Optimized for smooth Android back button
-              cardStyleInterpolator: Platform.OS === 'android' 
+              cardStyleInterpolator: Platform.OS === 'android'
                 ? CardStyleInterpolators.forRevealFromBottomAndroid
                 : CardStyleInterpolators.forHorizontalIOS,
               transitionSpec: {
@@ -161,7 +177,7 @@ function App() {
                 close: {
                   animation: 'timing',
                   config: {
-                    duration: 150, 
+                    duration: 150,
                   },
                 },
               },

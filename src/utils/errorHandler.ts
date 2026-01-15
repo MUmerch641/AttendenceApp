@@ -1,4 +1,6 @@
 import { SnackbarService } from '../services/SnackbarService';
+import { StorageService } from '../services/StorageService';
+import { NavigationService } from '../services/NavigationService';
 import axios from 'axios';
 
 export interface APIError {
@@ -17,17 +19,17 @@ export class ErrorHandler {
     // Network error (no internet, DNS failure, etc.)
 
     if (error.message || !error.response) {
-        return {
-          message: error.message || 'An unexpected error occurred. Please try again.',
-          isNetworkError: false,
-          isServerError: false,
-          isTimeout: false,
-        };
+      return {
+        message: error.message || 'An unexpected error occurred. Please try again.',
+        isNetworkError: false,
+        isServerError: false,
+        isTimeout: false,
+      };
     }
 
     if (error.message === 'Network Error' || !error.response) {
       return {
-        message: 'No internet connection. Please check your network and try again.'  ,
+        message: 'No internet connection. Please check your network and try again.',
         isNetworkError: true,
         isServerError: false,
         isTimeout: false,
@@ -51,10 +53,10 @@ export class ErrorHandler {
       const data = error.response.data;
 
       // Extract error message from various response formats
-      const message = 
-        data?.message || 
-        data?.error || 
-        data?.msg || 
+      const message =
+        data?.message ||
+        data?.error ||
+        data?.msg ||
         this.getDefaultMessageForStatus(status);
 
       return {
@@ -123,9 +125,9 @@ export class ErrorHandler {
   static shouldRetry(error: any): boolean {
     const parsedError = this.parseError(error);
     // Retry on network errors, timeouts, and server errors (5xx)
-    return parsedError.isNetworkError || 
-           parsedError.isTimeout || 
-           parsedError.isServerError;
+    return parsedError.isNetworkError ||
+      parsedError.isTimeout ||
+      parsedError.isServerError;
   }
 
   /**
@@ -157,9 +159,18 @@ export const setupAxiosInterceptors = () => {
   // Response interceptor
   axios.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
       // Log all errors
       ErrorHandler.logError(error, error.config?.url);
+
+      // Handle 401 Unauthorized (Auto Logout)
+      if (error.response && error.response.status === 401) {
+        await StorageService.clearAllData();
+        NavigationService.setAuthenticated(false);
+        NavigationService.reset([{ name: 'LoginScreen' }]);
+        SnackbarService.showError('Session expired. Please login again.');
+      }
+
       return Promise.reject(error);
     }
   );

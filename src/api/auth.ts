@@ -11,8 +11,8 @@ export interface ApiResponse {
 
 // 1. Prepare the Base URL securely
 // Removes trailing slash from config if it exists, then adds the API path
-const API_DOMAIN = config.API.BASE_URL.replace(/\/$/, ''); 
-const AUTH_PATH = '/attendance-api/auth'; 
+const API_DOMAIN = config.API.BASE_URL.replace(/\/$/, '');
+const AUTH_PATH = '/attendance-api/auth';
 
 // Final Base URL: https://attendance.curelogics.org/attendance-api/auth
 const BASE_URL = `${API_DOMAIN}${AUTH_PATH}`;
@@ -57,6 +57,7 @@ export interface ResetPasswordPayload {
 
 export interface ChangePasswordPayload {
   newPassword: string;
+  currentPassword?: string;
 }
 
 export interface ForgetPayload {
@@ -69,7 +70,7 @@ export interface VerifyOtpPayload {
 
 export const AuthAPI = {
   login: async (payload: LoginPayload): Promise<ApiResponse> => {
-    
+
     try {
       // Use apiClient instead of raw axios
       const res = await apiClient.post('/login', payload);

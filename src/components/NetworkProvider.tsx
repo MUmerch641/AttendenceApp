@@ -12,15 +12,30 @@ interface NetworkProviderProps {
 export default function NetworkProvider({ children }: NetworkProviderProps) {
   const { isOnline } = useNetwork();
   const [showNoInternetModal, setShowNoInternetModal] = useState(false);
+  const [isInitialCheck, setIsInitialCheck] = useState(true);
 
   useEffect(() => {
+    // Give initial network check time to complete (prevent flash of no internet modal)
+    const timer = setTimeout(() => {
+      setIsInitialCheck(false);
+    }, 1000); // Wait 1 second before allowing modal to show
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Don't show modal during initial check period
+    if (isInitialCheck) {
+      return;
+    }
+
     // Show modal when offline, hide when online
     if (isOnline === false) {
       setShowNoInternetModal(true);
     } else if (isOnline === true) {
       setShowNoInternetModal(false);
     }
-  }, [isOnline]);
+  }, [isOnline, isInitialCheck]);
 
   const handleRetry = async () => {
     // Check connectivity again
