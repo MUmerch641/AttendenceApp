@@ -92,13 +92,13 @@ function App() {
     checkAuthentication();
   }, []);
 
-  // Sync isAuthenticated state with authStateRef
+  // Sync isAuthenticated state with authStateRef - optimized interval
   useEffect(() => {
     const interval = setInterval(() => {
       if (authStateRef.current !== isAuthenticated) {
         setIsAuthenticated(authStateRef.current);
       }
-    }, 100);
+    }, 250); // 250ms is more than enough for smooth UX without performance hit
 
     return () => clearInterval(interval);
   }, [isAuthenticated]);

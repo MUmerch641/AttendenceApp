@@ -62,7 +62,7 @@ class NotificationServiceClass {
             PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
             {
               title: 'Enable Notifications',
-              message: 'Hourlio needs notification permission to send you important updates about your attendance.',
+              message: 'leohours needs notification permission to send you important updates about your attendance.',
               buttonPositive: 'Allow',
               buttonNegative: 'Deny',
             }

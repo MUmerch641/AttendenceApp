@@ -2,6 +2,8 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import config from '../config/app.config';
 import { StorageService } from '../services/StorageService';
+import { NavigationService } from '../services/NavigationService';
+import { SnackbarService } from '../services/SnackbarService';
 
 /**
  * Attendance API
@@ -58,7 +60,7 @@ apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
     // Handle network errors
     if (!error.response) {
       // Network error (no response received)
@@ -70,9 +72,12 @@ apiClient.interceptors.response.use(
       throw new Error('Server is temporarily unavailable. Please try again later.');
     }
 
-    // Handle authentication errors
+    // Handle authentication errors - Token Expired
     if (error.response.status === 401) {
-      // Could trigger logout here if needed
+      await StorageService.clearAllData();
+      NavigationService.setAuthenticated(false);
+      NavigationService.reset([{ name: 'LoginScreen' }]);
+      SnackbarService.showError('Session expired. Please login again.');
     }
 
     return Promise.reject(error);
@@ -243,7 +248,25 @@ export interface EmployeeReportResponse extends ApiResponse {
   totalCount: number;
 }
 
+export interface CheckStatusResponse extends ApiResponse {
+  data: {
+    hasTimedIn: boolean;
+    hasTimedOut: boolean;
+    action: 'timeIn' | 'timeOut';
+    message: string;
+  };
+}
+
 export const AttendanceAPI = {
+  checkStatus: async (): Promise<CheckStatusResponse> => {
+    try {
+      const res = await apiClient.get('/checkStatus');
+      return res.data;
+    } catch (error: any) {
+      throw error;
+    }
+  },
+
   create: async (payload: CreateAttendancePayload): Promise<ApiResponse> => {
     try {
       // Use apiClient instead of raw axios

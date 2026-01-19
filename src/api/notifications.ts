@@ -1,6 +1,8 @@
 import axios from 'axios';
 import config from '../config/app.config';
 import { StorageService } from '../services/StorageService';
+import { NavigationService } from '../services/NavigationService';
+import { SnackbarService } from '../services/SnackbarService';
 
 // Response type for API calls
 export interface ApiResponse {
@@ -52,6 +54,7 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
+      console.error('Error getting token for notifications request:', error);
     }
     return config;
   },
@@ -65,9 +68,19 @@ apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
+    // Handle 401 Unauthorized - Token Expired
+    if (error.response && error.response.status === 401) {
+      await StorageService.clearAllData();
+      NavigationService.setAuthenticated(false);
+      NavigationService.reset([{ name: 'LoginScreen' }]);
+      SnackbarService.showError('Session expired. Please login again.');
+    }
+    
     if (error.code === 'ECONNABORTED') {
+      console.warn('Request timeout in notifications API');
     } else if (!error.response) {
+      console.warn('Network error in notifications API');
     }
     return Promise.reject(error);
   }

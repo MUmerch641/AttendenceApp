@@ -148,11 +148,13 @@ export default function LeaveRequestScreen() {
   };
 
   const confirmSubmit = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
       const userData = await StorageService.getUserData();
       if (!userData) {
         SnackbarService.showError('User data not found. Please login again.');
+        setLoading(false);
+        setShowConfirmModal(false);
         return;
       }
 
@@ -170,13 +172,17 @@ export default function LeaveRequestScreen() {
 
       if (response.isSuccess) {
         SnackbarService.showSuccess('Leave request submitted successfully!');
+        setLoading(false);
+        setShowConfirmModal(false);
         navigation.goBack();
       } else {
         SnackbarService.showError(response.message || 'Failed to submit leave request');
+        setLoading(false);
+        setShowConfirmModal(false);
       }
     } catch (error) {
+      console.error('Leave submission error:', error);
       SnackbarService.showError('Failed to submit leave request');
-    } finally {
       setLoading(false);
       setShowConfirmModal(false);
     }

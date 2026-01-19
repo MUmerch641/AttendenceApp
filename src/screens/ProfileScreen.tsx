@@ -46,6 +46,7 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -68,31 +69,23 @@ export default function ProfileScreen() {
   };
 
   const performLogout = async () => {
+    setIsLoggingOut(true);
     try {
-      setShowLogoutModal(false);
-
       // Clear FCM token from backend and device
       await NotificationService.deleteToken();
 
-      // Clear all local data FIRST before changing auth state
+      // Clear all local data (tokens, user data, attendance session, etc.)
       await StorageService.clearAllData();
-      await StorageService.clearAttendanceSession();
 
-      // Update authentication state AFTER clearing data
+      // Set authentication to false and reset navigation
       NavigationService.setAuthenticated(false);
-
-      // Larger delay to ensure state is propagated before navigation
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 200));
-
-      // Reset navigation to LoginScreen with index 0
       NavigationService.reset([{ name: 'LoginScreen' }]);
 
-      // Show success after navigation attempt
-      setTimeout(() => {
-        SnackbarService.showSuccess('Logged out successfully');
-      }, 100);
+      SnackbarService.showSuccess('Logged out successfully');
     } catch (error) {
       SnackbarService.showError('Error during logout');
+    } finally {
+      setIsLoggingOut(false);
       setShowLogoutModal(false);
     }
   };
@@ -196,6 +189,7 @@ export default function ProfileScreen() {
             visible={showLogoutModal}
             onCancel={() => setShowLogoutModal(false)}
             onConfirm={performLogout}
+            loading={isLoggingOut}
           />
         </View>
 

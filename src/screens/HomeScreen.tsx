@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -54,7 +56,10 @@ export default function HomeScreen() {
   } | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [showImagePreview, setShowImagePreview] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [attendanceReason, setAttendanceReason] = useState('');
+  const [pendingAttendanceAction, setPendingAttendanceAction] = useState<'CHECK_IN' | 'CHECK_OUT' | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   // Animation values
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -137,6 +142,7 @@ export default function HomeScreen() {
   useEffect(() => {
     loadUserData();
     loadAttendanceSession();
+    syncAttendanceStatus();
     checkBiometricsAvailability();
 
     // Listen for profile image updates
@@ -167,6 +173,7 @@ export default function HomeScreen() {
     useCallback(() => {
       if (userData?._id) {
         loadNotificationCount();
+        syncAttendanceStatus(); // Also sync attendance status on focus
       }
     }, [userData?._id])
   );
@@ -176,14 +183,19 @@ export default function HomeScreen() {
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     if (isCheckedIn && checkInTimestamp) {
-      // Update working time every minute
-      intervalId = setInterval(() => {
+      // Update immediately first
+      const updateWorkedTime = () => {
         const now = new Date();
         const diffMs = now.getTime() - checkInTimestamp.getTime();
         const hours = Math.floor(diffMs / (1000 * 60 * 60));
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
         setWorkedTime(`${hours}h ${minutes}m`);
-      }, 60000); // Update every minute
+      };
+      
+      updateWorkedTime(); // Update immediately
+      
+      // Then update every 30 seconds for better responsiveness
+      intervalId = setInterval(updateWorkedTime, 30000);
     }
 
     // Cleanup interval on unmount or when check-in state changes
@@ -209,6 +221,7 @@ export default function HomeScreen() {
       setUserData(data);
       if (data) await loadEmployeeStats(data._id);
     } catch (error) {
+      ErrorHandler.logError(error, 'HomeScreen - loadUserData');
     }
   };
 
@@ -242,6 +255,7 @@ export default function HomeScreen() {
         setWorkedTime(session.workedTime);
       }
     } catch (error) {
+      ErrorHandler.logError(error, 'HomeScreen - loadAttendanceSession');
     }
   };
 
@@ -264,6 +278,63 @@ export default function HomeScreen() {
     }
   };
 
+  const syncAttendanceStatus = async () => {
+    try {
+      setSyncLoading(true);
+      const response = await AttendanceAPI.checkStatus();
+      
+      if (response.isSuccess && response.data) {
+        const { hasTimedIn, hasTimedOut } = response.data;
+        
+        // Sync the UI state with backend status
+        if (hasTimedIn && !hasTimedOut) {
+          // User has checked in but not checked out - update UI if out of sync
+          if (!isCheckedIn) {
+            setIsCheckedIn(true);
+            // Try to get time from local session, otherwise set defaults
+            const session = await StorageService.getAttendanceSession();
+            if (session?.checkInTime) {
+              setCheckInTime(session.checkInTime);
+              setCheckInTimestamp(session.checkInTimestamp ? new Date(session.checkInTimestamp) : null);
+            } else {
+              // Backend says checked in but no local data - use approximate time
+              const now = new Date();
+              const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              setCheckInTime(timeStr);
+              setCheckInTimestamp(now);
+              // Save to AsyncStorage
+              await StorageService.saveAttendanceSession({
+                isCheckedIn: true,
+                checkInTime: timeStr,
+                checkInTimestamp: now.toISOString(),
+                workedTime: '0h 0m'
+              });
+            }
+          }
+        } else if (hasTimedOut || (!hasTimedIn && !hasTimedOut)) {
+          // User has completed the day or hasn't checked in yet
+          if (isCheckedIn) {
+            // Local state shows checked in, but backend says completed - sync it
+            setIsCheckedIn(false);
+            setCheckInTimestamp(null);
+            // Update AsyncStorage
+            await StorageService.saveAttendanceSession({
+              isCheckedIn: false,
+              checkInTime: checkInTime,
+              checkInTimestamp: null,
+              workedTime: workedTime
+            });
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail, don't disrupt user experience
+      ErrorHandler.logError(error, 'HomeScreen - syncAttendanceStatus');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
 
 
   const handleTabPress = (tab: 'Check' | 'Break' | 'Leave') => {
@@ -275,6 +346,23 @@ export default function HomeScreen() {
   };
 
   const handleAttendancePress = async () => {
+    // Show reason modal first
+    // setPendingAttendanceAction(isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN');
+    // setAttendanceReason('');
+    // setShowReasonModal(true);
+    
+    // Directly process attendance without reason modal
+    processAttendance();
+  };
+
+  const processAttendance = async () => {
+    // if (!attendanceReason.trim()) {
+    //   SnackbarService.showError('Please enter a reason');
+    //   return;
+    // }
+
+    // setShowReasonModal(false);
+
     // If biometrics are available, use biometric authentication
     if (biometricsAvailable) {
       const { available } = await AttendanceService.checkAvailability();
@@ -309,7 +397,7 @@ export default function HomeScreen() {
               text: 'I Understand',
               onPress: async () => {
                 await StorageService.setLocationConsentSeen();
-                handleAttendancePress(); // Retry automatically
+                processAttendance(); // Retry automatically
               }
             }
           ]
@@ -340,13 +428,11 @@ export default function HomeScreen() {
 
       const payload = {
         empId: user.employeeId,
-        reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN',
+        reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN', // attendanceReason.trim(),
         latitude,
         longitude,
         ipAddress: ipAddress || undefined,
       };
-console.log("ipAddress",ipAddress)
-      console.log("payload",payload)
 
       const response = await AttendanceAPI.create(payload);
       if (response.isSuccess) {
@@ -399,6 +485,8 @@ console.log("ipAddress",ipAddress)
       ErrorHandler.showError(error, "Failed to connect to server");
     } finally {
       setLoading(false);
+      // setPendingAttendanceAction(null);
+      // setAttendanceReason('');
     }
   };
 
@@ -440,12 +528,18 @@ console.log("ipAddress",ipAddress)
                 </View>
               )}
             </TouchableOpacity>
-            <View>
-              <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</Text>
+            <View style={styles.textContainer}>
+              <Text style={styles.dateText} numberOfLines={1}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</Text>
               <View style={styles.greetingRow}>
-                <Text style={styles.greetingText}>Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}</Text>
-                <Text style={{ fontSize: 18 }}>{userData?.fullName || 'User'}</Text>
+                <Text style={styles.greetingText} numberOfLines={1}>Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'} </Text>
+                <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">{userData?.fullName || 'User'}</Text>
               </View>
+              {syncLoading && (
+                <View style={styles.syncBadge}>
+                  <ActivityIndicator size="small" color="#5B4BFF" />
+                  <Text style={styles.syncText}>Syncing...</Text>
+                </View>
+              )}
             </View>
           </View>
           <TouchableOpacity
@@ -547,9 +641,9 @@ console.log("ipAddress",ipAddress)
                   style={[styles.checkOutButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
                   activeOpacity={0.85}
                   onPress={handleAttendancePress}
-                  disabled={loading}
+                  disabled={loading || syncLoading}
                 >
-                  {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
+                  {(loading || syncLoading) ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
                   <Text style={styles.checkOutText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -638,6 +732,60 @@ console.log("ipAddress",ipAddress)
         onClose={() => setShowImagePreview(false)}
       />
 
+      {/* Reason Input Modal */}
+      {/* <Modal
+        visible={showReasonModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReasonModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.reasonModalContainer}>
+            <Text style={styles.reasonModalTitle}>
+              {pendingAttendanceAction === 'CHECK_IN' ? 'Check In Reason' : 'Check Out Reason'}
+            </Text>
+            <Text style={styles.reasonModalSubtitle}>
+              Please provide a reason for {pendingAttendanceAction === 'CHECK_IN' ? 'checking in' : 'checking out'}
+            </Text>
+            
+            <TextInput
+              style={styles.reasonInput}
+              placeholder="Enter reason here..."
+              placeholderTextColor="#94A3B8"
+              value={attendanceReason}
+              onChangeText={setAttendanceReason}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              autoFocus
+            />
+            
+            <View style={styles.reasonModalButtons}>
+              <TouchableOpacity
+                style={[styles.reasonModalButton, styles.reasonCancelButton]}
+                onPress={() => {
+                  setShowReasonModal(false);
+                  setAttendanceReason('');
+                  setPendingAttendanceAction(null);
+                }}
+              >
+                <Text style={styles.reasonCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.reasonModalButton, styles.reasonSubmitButton]}
+                onPress={processAttendance}
+                disabled={!attendanceReason.trim()}
+              >
+                <Text style={styles.reasonSubmitButtonText}>
+                  {pendingAttendanceAction === 'CHECK_IN' ? 'Check In' : 'Check Out'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal> */}
+
     </SafeAreaView>
   );
 }
@@ -648,7 +796,7 @@ const styles = StyleSheet.create({
   blob: { position: 'absolute', top: -100, right: -100, width: 300, height: 300, borderRadius: 150, backgroundColor: '#5B4BFF10' },
 
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, marginBottom: 24 },
-  userInfo: { flexDirection: 'row', alignItems: 'center' },
+  userInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
   avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12, borderWidth: 2, borderColor: '#FFF' },
   defaultAvatar: {
     width: 50,
@@ -661,9 +809,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  textContainer: { flex: 1, minWidth: 0, marginRight: 12 },
   dateText: { fontSize: 13, color: '#64748B', marginBottom: 2 },
-  greetingRow: { flexDirection: 'row', alignItems: 'center' },
-  greetingText: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginRight: 6 },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  greetingText: { fontSize: 18, fontWeight: '700', color: '#0F172A', flexShrink: 0 },
+  userName: { fontSize: 18, color: '#0F172A', flexShrink: 1, minWidth: 0 },
   bellButton: {
     width: 44,
     height: 44,
@@ -858,5 +1008,96 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#94A3B8',
+  },
+
+  // Reason Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  reasonModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  reasonModalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  reasonModalSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 20,
+  },
+  reasonInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 16,
+    color: '#0F172A',
+    minHeight: 120,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  reasonModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reasonModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reasonCancelButton: {
+    backgroundColor: '#F1F5F9',
+  },
+  reasonCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  reasonSubmitButton: {
+    backgroundColor: '#5B4BFF',
+    shadowColor: '#5B4BFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  reasonSubmitButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  syncBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  syncText: {
+    fontSize: 11,
+    color: '#5B4BFF',
+    fontWeight: '600',
   },
 });

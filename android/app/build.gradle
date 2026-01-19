@@ -80,7 +80,7 @@ android {
 
     namespace "com.attendenceapp"
     defaultConfig {
-        applicationId "com.Hourlio.app"
+        applicationId "com.leohours.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

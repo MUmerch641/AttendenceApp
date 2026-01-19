@@ -1,6 +1,8 @@
 import axios from 'axios';
 import config from '../config/app.config';
 import { StorageService } from '../services/StorageService';
+import { NavigationService } from '../services/NavigationService';
+import { SnackbarService } from '../services/SnackbarService';
 
 // Response type for API calls
 export interface ApiResponse {
@@ -36,10 +38,26 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
+      console.error('Error getting token for auth request:', error);
     }
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// 2.6. Add Response Interceptor for Token Expiration
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    // Handle 401 Unauthorized - Token Expired
+    if (error.response && error.response.status === 401) {
+      await StorageService.clearAllData();
+      NavigationService.setAuthenticated(false);
+      NavigationService.reset([{ name: 'LoginScreen' }]);
+      SnackbarService.showError('Session expired. Please login again.');
+    }
     return Promise.reject(error);
   }
 );

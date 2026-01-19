@@ -7,6 +7,7 @@ import {
   Dimensions,
   StatusBar,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,7 @@ const { width, height } = Dimensions.get('window');
 type WelcomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
   
 export default function WelcomeScreen() {
+  const [lottieLoaded, setLottieLoaded] = React.useState(false);
   
   const handleGetStarted = async () => {
     // Mark that user has seen the welcome screen
@@ -51,18 +53,24 @@ export default function WelcomeScreen() {
 
       {/* Logo Section */}
       <View style={styles.logoContainer}>
-        <Text style={styles.logoMain}>Hourlio</Text>
+        <Text style={styles.logoMain}>leohours</Text>
       </View>
 
       {/* Illustration Section */}
       <View style={styles.illustrationContainer}>
         <View style={styles.figureBox}>
+          {!lottieLoaded && (
+            <View style={styles.lottieLoader}>
+              <ActivityIndicator size="large" color="#5B4BFF" />
+            </View>
+          )}
           <LottieView
             source={{ uri: 'https://assets.lottiefiles.com/packages/lf20_1pxqjqps.json' }}
             autoPlay
             loop
             style={styles.lottie}
             resizeMode="cover"
+            onAnimationFinish={() => setLottieLoaded(true)}
           />
         </View>
       </View>
@@ -140,6 +148,17 @@ const styles = StyleSheet.create({
   lottie: {
     width: '100%',
     height: '100%',
+  },
+  lottieLoader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    zIndex: 1,
   },
 
   bottomCard: {

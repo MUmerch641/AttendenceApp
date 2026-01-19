@@ -34,14 +34,14 @@ import { ProfileImageService } from '../services/ProfileImageService';
 
 export default function SettingsScreen() {
   const [changePasswordModal, setChangePasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -67,6 +67,7 @@ export default function SettingsScreen() {
       const data = await StorageService.getUserData();
       setUserData(data);
     } catch (error) {
+      console.error('Error loading user data in Settings:', error);
     }
   };
   const handleLogout = async () => {
@@ -74,41 +75,31 @@ export default function SettingsScreen() {
     setShowLogoutModal(true);
   };
 
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-
   const performLogout = async () => {
+    setIsLoggingOut(true);
     try {
-      setShowLogoutModal(false);
-
       // Clear FCM token from backend and device
       await NotificationService.deleteToken();
 
-      // Clear all local data FIRST before changing auth state
+      // Clear all local data (tokens, user data, attendance session, etc.)
       await StorageService.clearAllData();
-      await StorageService.clearAttendanceSession();
 
-      // Update authentication state AFTER clearing data
+      // Set authentication to false and reset navigation
       NavigationService.setAuthenticated(false);
-
-      // Larger delay to ensure state is propagated before navigation
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 200));
-
-      // Reset navigation to LoginScreen with index 0
       NavigationService.reset([{ name: 'LoginScreen' }]);
 
-      // Show success after navigation attempt
-      setTimeout(() => {
-        SnackbarService.showSuccess('Logged out successfully');
-      }, 100);
+      SnackbarService.showSuccess('Logged out successfully');
     } catch (error) {
       SnackbarService.showError('Error during logout');
+    } finally {
+      setIsLoggingOut(false);
       setShowLogoutModal(false);
     }
   };
 
   const handleChangePassword = async () => {
     // Validation
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       SnackbarService.showError('Please fill in all fields');
       return;
     }
@@ -125,7 +116,7 @@ export default function SettingsScreen() {
 
     setLoading(true);
     try {
-      const response = await AuthAPI.changePassword({ newPassword, currentPassword });
+      const response = await AuthAPI.changePassword({ newPassword });
 
       if (response.isSuccess) {
         // Close modal first, then show success message
@@ -134,7 +125,6 @@ export default function SettingsScreen() {
           SnackbarService.showSuccess(response.message || 'Password changed successfully');
         }, 300); // Small delay to ensure modal is closed
         // Clear form
-        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
       } else {
@@ -224,6 +214,7 @@ export default function SettingsScreen() {
           visible={showLogoutModal}
           onCancel={() => setShowLogoutModal(false)}
           onConfirm={performLogout}
+          loading={isLoggingOut}
         />
 
         <View style={{ height: 100 }} />
@@ -249,32 +240,6 @@ export default function SettingsScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Current Password */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Current Password</Text>
-                <View style={styles.inputContainer}>
-                  <Lock size={20} color="#64748B" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter current password"
-                    secureTextEntry={!showCurrentPassword}
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                    placeholderTextColor="#94A3B8"
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                    style={styles.eyeButton}
-                  >
-                    {showCurrentPassword ? (
-                      <EyeOff size={20} color="#64748B" />
-                    ) : (
-                      <Eye size={20} color="#64748B" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-
               {/* New Password */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>New Password</Text>

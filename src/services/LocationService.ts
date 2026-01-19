@@ -36,7 +36,7 @@ export const LocationService = {
                     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
                     {
                         title: 'Location Permission Required',
-                        message: 'Hourlio needs access to your location to mark attendance.',
+                        message: 'leohours needs access to your location to mark attendance.',
                         buttonNeutral: 'Ask Me Later',
                         buttonNegative: 'Cancel',
                         buttonPositive: 'OK',
