@@ -70,7 +70,7 @@ export default function WelcomeScreen() {
             loop
             style={styles.lottie}
             resizeMode="cover"
-            onAnimationFinish={() => setLottieLoaded(true)}
+            onAnimationLoaded={() => setLottieLoaded(true)}
           />
         </View>
       </View>

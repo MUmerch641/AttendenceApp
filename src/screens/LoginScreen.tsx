@@ -185,7 +185,7 @@ export default function LoginScreen() {
                 speed={0.8}
                 style={styles.lottie}
                 resizeMode="cover"
-                onAnimationFinish={() => setLottieLoaded(true)}
+                onAnimationLoaded={() => setLottieLoaded(true)}
               />
             </Animated.View>
 
