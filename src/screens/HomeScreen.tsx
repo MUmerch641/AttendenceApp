@@ -191,7 +191,7 @@ export default function HomeScreen() {
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
         setWorkedTime(`${hours}h ${minutes}m`);
       };
-      
+       
       updateWorkedTime(); // Update immediately
       
       // Then update every 30 seconds for better responsiveness
@@ -455,24 +455,18 @@ export default function HomeScreen() {
           SnackbarService.showSuccess(response.message || "Checked In Successfully!");
         } else {
           setIsCheckedIn(false);
-          let calculatedWorkTime = '0h 0m';
+          setCheckInTimestamp(null);
 
-          if (checkInTimestamp) {
-            const now = new Date();
-            const diffMs = now.getTime() - checkInTimestamp.getTime();
-            const hours = Math.floor(diffMs / (1000 * 60 * 60));
-            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-            calculatedWorkTime = `${hours}h ${minutes}m`;
-            setWorkedTime(calculatedWorkTime);
-            setCheckInTimestamp(null);
-          }
+          // Clear check-in time and working time for next day
+          setCheckInTime('--:--');
+          setWorkedTime('0h 0m');
 
           // Save to AsyncStorage
           await StorageService.saveAttendanceSession({
             isCheckedIn: false,
-            checkInTime: checkInTime,
+            checkInTime: '--:--',
             checkInTimestamp: null,
-            workedTime: calculatedWorkTime
+            workedTime: '0h 0m'
           });
 
           SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
