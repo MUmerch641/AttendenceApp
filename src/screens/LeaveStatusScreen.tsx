@@ -8,6 +8,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Dimensions,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
@@ -23,9 +25,14 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Trash2,
+  Edit2,
+  X,
 } from 'lucide-react-native';
+import { Alert } from 'react-native';
 import { NavigationService } from '../services/NavigationService';
-import { AttendanceAPI, LeaveRequest } from '../api/attendance';
+import { AttendanceAPI } from '../api/attendance';
+import { LeaveRequest } from '../types';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService } from '../services/StorageService';
 import { ErrorHandler } from '../utils/errorHandler';
@@ -47,6 +54,9 @@ export default function LeaveStatusScreen() {
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<'network' | 'server' | 'general'>('general');
   const [userId, setUserId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedIdForDelete, setSelectedIdForDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Load user data to get userId
   useEffect(() => {
@@ -81,11 +91,13 @@ export default function LeaveStatusScreen() {
         setError(null);
       }
       
-      const response = await AttendanceAPI.getAllLeavesByUserId(userId);
+      const response = await AttendanceAPI.getMyAllLeaves();
       
-      if (response.isSuccess && response.data?.leaves) {
-        setLeaves(response.data.leaves);
-        applyFilter(response.data.leaves, activeFilter);
+      if (response.isSuccess) {
+        // Based on backend example: data is the array
+        const leaveRecords = Array.isArray(response.data) ? response.data : [];
+        setLeaves(leaveRecords);
+        applyFilter(leaveRecords, activeFilter);
         setError(null);
       } else {
         const errorMsg = response.message || 'Failed to load leave requests';
@@ -137,6 +149,37 @@ export default function LeaveStatusScreen() {
       loadLeaves();
     }
   }, [userId]);
+
+  const handleDelete = (leaveId: string) => {
+    if (!leaveId) return;
+    setSelectedIdForDelete(leaveId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedIdForDelete) return;
+    
+    try {
+      setDeleting(true);
+      const response = await AttendanceAPI.deleteLeave(selectedIdForDelete);
+      if (response.isSuccess) {
+        SnackbarService.showSuccess('Leave request deleted successfully');
+        setShowDeleteModal(false);
+        loadLeaves(false);
+      } else {
+        SnackbarService.showError(response.message || 'Failed to delete leave request');
+      }
+    } catch (error) {
+      ErrorHandler.showError(error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEdit = (item: LeaveRequest) => {
+    // Navigate to LeaveRequest screen with data for editing
+    navigation.navigate('LeaveRequest', { editLeave: item });
+  };
 
   const formatDate = (dateString: string) => {
     try {
@@ -198,18 +241,40 @@ export default function LeaveStatusScreen() {
         </View>
       </View>
 
-      <View style={styles.leaveDetails}>
-        <View style={styles.dateRow}>
-          <Calendar size={14} color="#64748B" />
-          <Text style={styles.dateText}>
-            {formatDate(item.startDate)} - {formatDate(item.endDate)}
-          </Text>
-        </View>
-        <View style={styles.daysRow}>
-          <Clock size={14} color="#64748B" />
-          <Text style={styles.daysText}>{item.leaves} day{item.leaves > 1 ? 's' : ''}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={styles.leaveDetails}>
+          <View style={styles.dateRow}>
+            <Calendar size={14} color="#64748B" />
+            <Text style={styles.dateText}>
+              {formatDate(item.startDate)} - {formatDate(item.endDate)}
+            </Text>
+          </View>
+          <View style={styles.daysRow}>
+            <Clock size={14} color="#64748B" />
+            <Text style={styles.daysText}>{item.totalDays || 0} day{(item.totalDays || 0) > 1 ? 's' : ''}</Text>
+          </View>
         </View>
       </View>
+
+      {item.status.toUpperCase() === 'PENDING' && (
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.editButton]}
+            onPress={() => handleEdit(item)}
+          >
+            <Edit2 size={16} color="#5B4BFF" />
+            <Text style={styles.editText}>Edit</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleDelete(item._id || '')}
+          >
+            <Trash2 size={16} color="#EF4444" />
+            <Text style={styles.deleteText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {item.reason && (
         <View style={styles.reasonContainer}>
@@ -221,7 +286,7 @@ export default function LeaveStatusScreen() {
       )}
 
       <Text style={styles.submittedDate}>
-        Submitted on {formatDate(item.createdAt)}
+        Submitted on {formatDate(item.createdAt || '')}
       </Text>
     </View>
   );
@@ -345,7 +410,7 @@ export default function LeaveStatusScreen() {
         <FlashList
           data={filteredLeaves}
           renderItem={renderLeaveItem}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item, index) => item._id || index.toString()}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyState}
           refreshControl={
@@ -357,6 +422,55 @@ export default function LeaveStatusScreen() {
             />
           }
         />
+
+        {/* Delete Confirmation Modal */}
+        <Modal visible={showDeleteModal} transparent animationType="fade">
+          <TouchableWithoutFeedback onPress={() => !deleting && setShowDeleteModal(false)}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <View style={[styles.modalIconContainer, { backgroundColor: '#FEF2F2' }]}>
+                      <Trash2 size={24} color="#EF4444" />
+                    </View>
+                    <TouchableOpacity 
+                      onPress={() => setShowDeleteModal(false)}
+                      disabled={deleting}
+                    >
+                      <X size={24} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.modalTitle}>Delete Request?</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Are you sure you want to delete this leave request? This action cannot be undone.
+                  </Text>
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={() => setShowDeleteModal(false)}
+                      disabled={deleting}
+                    >
+                      <Text style={styles.cancelText}>Keep it</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.confirmBtn, { backgroundColor: '#EF4444' }]}
+                      onPress={confirmDelete}
+                      disabled={deleting}
+                    >
+                      {deleting ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <Text style={styles.confirmText}>Yes, Delete</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -564,5 +678,111 @@ const styles = StyleSheet.create({
     height: 380,
     borderRadius: 190,
     backgroundColor: '#FF7A0018',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  editButton: {
+    borderColor: '#E8ECFF',
+    backgroundColor: '#F5F7FF',
+  },
+  deleteButton: {
+    borderColor: '#FEE2E2',
+    backgroundColor: '#FEF2F2',
+  },
+  editText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#5B4BFF',
+  },
+  deleteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0B1226',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 15,
+    color: '#64748B',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#5B4BFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

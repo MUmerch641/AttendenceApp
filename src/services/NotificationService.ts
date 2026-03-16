@@ -67,7 +67,7 @@ class NotificationServiceClass {
               buttonNegative: 'Deny',
             }
           );
-          
+
           const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
           return isGranted;
         }
@@ -76,12 +76,12 @@ class NotificationServiceClass {
 
       // iOS
       const authStatus = await messaging().requestPermission();
-      
+
       const isAuthorized = (
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
         authStatus === messaging.AuthorizationStatus.PROVISIONAL
       );
-      
+
       return isAuthorized;
     } catch (error) {
       return false;
@@ -127,12 +127,10 @@ class NotificationServiceClass {
         return;
       }
 
-      const API_URL = `${config.API.BASE_URL}/attendance-api/fcm-token`;
+      const API_URL = `${config.API.BASE_URL}/attendance-api/user/updateFcmToken`;
 
-      const payload = { 
-        fcmToken: token,
-        userId: userData._id,
-        employeeId: userData.employeeId
+      const payload = {
+        "fcm_token": token
       };
 
       const response = await axios.post(

@@ -12,6 +12,8 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 import SupportPolicyScreen from './src/screens/SupportPolicyScreen';
 import TermsConditionsScreen from './src/screens/TermsConditionsScreen';
+import AttendanceRequestScreen from './src/screens/AttendanceRequestScreen';
+import AttendanceRequestStatusScreen from './src/screens/AttendanceRequestStatusScreen';
 
 // Services
 import { navigationRef, authStateRef } from './src/services/NavigationService';
@@ -21,18 +23,21 @@ import { setupAxiosInterceptors } from './src/utils/errorHandler';
 import BottomTabNavigator from './src/components/BottomTabNavigator';
 import NetworkProvider from './src/components/NetworkProvider';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { LeaveRequest } from './src/types';
 
 // Type Definitions
 export type RootStackParamList = {
   Welcome: undefined;
   LoginScreen: undefined;
   Dashboard: undefined;
-  LeaveRequest: undefined;
+  LeaveRequest: { editLeave?: LeaveRequest };
   LeaveStatus: undefined;
   Notifications: undefined;
   PrivacyPolicy: undefined;
   SupportPolicy: undefined;
   TermsConditions: undefined;
+  AttendanceRequest: undefined;
+  AttendanceRequestStatus: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -44,7 +49,7 @@ function App() {
   const [initialRoute, setInitialRoute] = useState<keyof RootStackParamList>('Welcome');
 
   // Define protected routes (require authentication)
-  const protectedRoutes = ['Dashboard', 'LeaveRequest', 'LeaveStatus', 'Notifications'];
+  const protectedRoutes = ['Dashboard', 'LeaveRequest', 'LeaveStatus', 'Notifications', 'AttendanceRequest', 'AttendanceRequestStatus'];
 
   // Define public routes (no authentication required)
   const publicRoutes = ['Welcome', 'LoginScreen', 'PrivacyPolicy', 'SupportPolicy', 'TermsConditions'];
@@ -196,6 +201,8 @@ function App() {
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
             <Stack.Screen name="SupportPolicy" component={SupportPolicyScreen} />
             <Stack.Screen name="TermsConditions" component={TermsConditionsScreen} />
+            <Stack.Screen name="AttendanceRequest" component={AttendanceRequestScreen} />
+            <Stack.Screen name="AttendanceRequestStatus" component={AttendanceRequestStatusScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </NetworkProvider>

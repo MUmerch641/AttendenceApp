@@ -16,48 +16,29 @@ export class ErrorHandler {
    * Parse and handle API errors consistently
    */
   static parseError(error: any): APIError {
-    // Network error (no internet, DNS failure, etc.)
-
-    if (error.message || !error.response) {
-      return {
-        message: error.message || 'An unexpected error occurred. Please try again.',
-        isNetworkError: false,
-        isServerError: false,
-        isTimeout: false,
-      };
-    }
-
-    if (error.message === 'Network Error' || !error.response) {
-      return {
-        message: 'No internet connection. Please check your network and try again.',
-        isNetworkError: true,
-        isServerError: false,
-        isTimeout: false,
-      };
-    }
-
-    // Timeout error
-    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      return {
-        message: 'Request timed out. The server is taking too long to respond.',
-        status: 408,
-        isNetworkError: false,
-        isServerError: true,
-        isTimeout: true,
-      };
-    }
-
-    // Server returned an error response
+    // 1. Server returned an error response (Priority)
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data;
 
       // Extract error message from various response formats
-      const message =
-        data?.message ||
-        data?.error ||
-        data?.msg ||
-        this.getDefaultMessageForStatus(status);
+      let message = data?.message || data?.error || data?.msg;
+      
+      // If message is still empty but data is a plain string, use the data
+      if (!message && typeof data === 'string' && data.length < 500) {
+        message = data;
+      }
+      
+      // Handle array messages (e.g. from NestJS validation)
+      if (Array.isArray(message)) {
+        message = message.join('. ');
+      }
+      // Handle object messages
+      else if (typeof message === 'object' && message !== null) {
+        message = JSON.stringify(message);
+      }
+      
+      message = message || this.getDefaultMessageForStatus(status);
 
       return {
         message,
@@ -68,7 +49,28 @@ export class ErrorHandler {
       };
     }
 
-    // Unknown error
+    // 2. Timeout error
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      return {
+        message: 'Request timed out. The server is taking too long to respond.',
+        status: 408,
+        isNetworkError: false,
+        isServerError: true,
+        isTimeout: true,
+      };
+    }
+
+    // 3. Network error (no internet, DNS failure, etc.)
+    if (error.message === 'Network Error' || !error.response) {
+      return {
+        message: 'No internet connection. Please check your network and try again.',
+        isNetworkError: true,
+        isServerError: false,
+        isTimeout: false,
+      };
+    }
+
+    // 4. Unknown error or generic message
     return {
       message: error.message || 'An unexpected error occurred. Please try again.',
       isNetworkError: false,

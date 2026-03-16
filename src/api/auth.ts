@@ -14,7 +14,7 @@ export interface ApiResponse {
 // 1. Prepare the Base URL securely
 // Removes trailing slash from config if it exists, then adds the API path
 const API_DOMAIN = config.API.BASE_URL.replace(/\/$/, '');
-const AUTH_PATH = '/attendance-api/auth';
+const AUTH_PATH = '/api/auth';
 
 // Final Base URL: https://attendance.curelogics.org/attendance-api/auth
 const BASE_URL = `${API_DOMAIN}${AUTH_PATH}`;
@@ -75,7 +75,7 @@ export interface ResetPasswordPayload {
 
 export interface ChangePasswordPayload {
   newPassword: string;
-  currentPassword?: string;
+  oldPassword: string;
 }
 
 export interface ForgetPayload {
@@ -105,14 +105,19 @@ export const AuthAPI = {
 
   changePassword: async (payload: ChangePasswordPayload, token?: string): Promise<ApiResponse> => {
     // We can override headers for specific requests
-    const res = await apiClient.post('/changePassword', payload, {
+    const res = await apiClient.post('/change-password', payload, {
       headers: { Authorization: token ? `Bearer ${token}` : '' },
     });
     return res.data;
   },
 
   forget: async (payload: ForgetPayload): Promise<ApiResponse> => {
-    const res = await apiClient.post('/forget', payload);
+    const res = await apiClient.post('/forgot-password', payload);
+    return res.data;
+  },
+
+  profile: async (): Promise<ApiResponse> => {
+    const res = await apiClient.get('/profile');
     return res.data;
   },
 

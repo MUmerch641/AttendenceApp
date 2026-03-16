@@ -78,28 +78,41 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const response = await AuthAPI.login({ email: email.trim(), password });
-      
+
       if (response.isSuccess) {
-        // Save tokens
-        if (response.data?.token) {
-          await StorageService.saveTokens(response.data.token);
+        // Extract access token
+        const accessToken = response.data?.access_token || response.data?.token;
+
+        if (accessToken) {
+          // Only save access token, refresh token is unknown from new API, so we mock it or save only access
+          await StorageService.saveTokens({ accessToken, refreshToken: '' });
+
+          // Temporary save of token to apiClient implicitly by StorageService for the next call
+          // Fetch user profile
+          try {
+            const profileResponse = await AuthAPI.profile();
+            if (profileResponse.isSuccess && profileResponse.data) {
+              await StorageService.saveUserData(profileResponse.data);
+            } else {
+              throw new Error('Failed to fetch profile details');
+            }
+          } catch (profileError) {
+            throw new Error('Could not retrieve user profile');
+          }
+        } else {
+          throw new Error('Login failed: No access token received');
         }
-        
-        // Save user data
-        if (response.data?.userObject) {
-          await StorageService.saveUserData(response.data.userObject);
-        }
-        
+
         // Initialize notifications (this will request permission)
         try {
           await NotificationService.initialize();
         } catch (error) {
           // Don't block login if notifications fail
         }
-        
+
         // Update authentication state in NavigationService
         NavigationService.setAuthenticated(true);
-        
+
         SnackbarService.showSuccess(response.message || 'Login successful!');
         NavigationService.reset([{ name: 'Dashboard' }]);
       } else {
@@ -124,7 +137,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     try {
       const response = await AuthAPI.forget({ email: forgotEmail.trim() });
-      
+
       if (response.isSuccess) {
         SnackbarService.showSuccess(response.message || 'Password reset email sent!');
         setModalVisible(false);
@@ -165,105 +178,105 @@ export default function LoginScreen() {
           >
             <View style={styles.inner}>
 
-            {/* Engaging Lottie Animation (Same Feel as Welcome) */}
-            <Animated.View style={[
-              styles.lottieContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ scale: logoScale }],
-              }
-            ]}>
-              {!lottieLoaded && (
-                <View style={styles.lottieLoader}>
-                  <ActivityIndicator size="large" color="#5B4BFF" />
-                </View>
-              )}
-              <LottieView
-                source={{ uri: 'https://lottie.host/4d2c16df-7b8c-43bc-8e9b-df196d6d0cc6/IRu5CA0oNT.lottie' }}
-                autoPlay
-                loop
-                speed={0.8}
-                style={styles.lottie}
-                resizeMode="cover"
-                onAnimationLoaded={() => setLottieLoaded(true)}
-              />
-            </Animated.View>
-
-            {/* Logo */}
-            <Animated.View style={[
-              styles.logoContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              }
-            ]}>
-              <Text style={styles.logoMain}>leohours</Text>
-            </Animated.View>
-
-            <Animated.Text style={[
-              styles.title,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              }
-            ]}>Welcome back!</Animated.Text>
-            <Animated.Text style={[
-              styles.subtitle,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              }
-            ]}>Log in to track your time</Animated.Text>
-
-            {/* Form Card */}
-            <Animated.View style={[
-              styles.formCard,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: formSlide }],
-              }
-            ]}>
-              <View style={styles.inputWrapper}>
-                <Mail size={20} color="#64748B" strokeWidth={2} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Work Email"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-              </View>
-
-              <View style={styles.inputWrapper}>
-                <Lock size={20} color="#64748B" strokeWidth={2} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <EyeOff size={20} color="#64748B" /> : <Eye size={20} color="#64748B" />}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity style={styles.forgot} onPress={() => setModalVisible(true)}>
-                <Text style={styles.forgotText}>Forgot Password?</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.loginBtnText}>Log In</Text>
+              {/* Engaging Lottie Animation (Same Feel as Welcome) */}
+              <Animated.View style={[
+                styles.lottieContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: logoScale }],
+                }
+              ]}>
+                {!lottieLoaded && (
+                  <View style={styles.lottieLoader}>
+                    <ActivityIndicator size="large" color="#5B4BFF" />
+                  </View>
                 )}
-              </TouchableOpacity>
+                <LottieView
+                  source={{ uri: 'https://lottie.host/4d2c16df-7b8c-43bc-8e9b-df196d6d0cc6/IRu5CA0oNT.lottie' }}
+                  autoPlay
+                  loop
+                  speed={0.8}
+                  style={styles.lottie}
+                  resizeMode="cover"
+                  onAnimationLoaded={() => setLottieLoaded(true)}
+                />
+              </Animated.View>
 
-            </Animated.View>
+              {/* Logo */}
+              <Animated.View style={[
+                styles.logoContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                }
+              ]}>
+                <Text style={styles.logoMain}>leohours</Text>
+              </Animated.View>
+
+              <Animated.Text style={[
+                styles.title,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                }
+              ]}>Welcome back!</Animated.Text>
+              <Animated.Text style={[
+                styles.subtitle,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                }
+              ]}>Log in to track your time</Animated.Text>
+
+              {/* Form Card */}
+              <Animated.View style={[
+                styles.formCard,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: formSlide }],
+                }
+              ]}>
+                <View style={styles.inputWrapper}>
+                  <Mail size={20} color="#64748B" strokeWidth={2} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Work Email"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                  />
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Lock size={20} color="#64748B" strokeWidth={2} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff size={20} color="#64748B" /> : <Eye size={20} color="#64748B" />}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.forgot} onPress={() => setModalVisible(true)}>
+                  <Text style={styles.forgotText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.loginBtnText}>Log In</Text>
+                  )}
+                </TouchableOpacity>
+
+              </Animated.View>
             </View>
           </ScrollView>
         </TouchableWithoutFeedback>

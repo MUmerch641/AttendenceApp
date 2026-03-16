@@ -15,7 +15,7 @@ import {
   Animated,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 
@@ -42,11 +42,15 @@ import { AttendanceAPI } from '../api/attendance';
 import { StorageService } from '../services/StorageService';
 import { SnackbarService } from '../services/SnackbarService';
 import { useSmoothBackHandler } from '../hooks/useSmoothBackHandler';
+import { TeamLead, LeaveRequest, CreateLeavePayload } from '../types';
 
 type LeaveRequestNavigationProp = StackNavigationProp<RootStackParamList, 'LeaveRequest'>;
 
 export default function LeaveRequestScreen() {
   const navigation = useNavigation<LeaveRequestNavigationProp>();
+  const route = useRoute<RouteProp<RootStackParamList, 'LeaveRequest'>>();
+  const editData = route.params?.editLeave;
+
   const [reason, setReason] = useState('');
   const [selectedLeaveType, setSelectedLeaveType] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -57,6 +61,10 @@ export default function LeaveRequestScreen() {
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [teamLeads, setTeamLeads] = useState<TeamLead[]>([]);
+  const [selectedTeamLead, setSelectedTeamLead] = useState<TeamLead | null>(null);
+  const [showTeamLeadModal, setShowTeamLeadModal] = useState(false);
+  const [fetchingLeads, setFetchingLeads] = useState(true);
 
   // Handle Android back button smoothly
   useSmoothBackHandler();
@@ -109,16 +117,56 @@ export default function LeaveRequestScreen() {
         useNativeDriver: true,
       }),
     ]).start();
+    fetchTeamLeads();
   }, []);
 
-  // Leave types
+  // Handle Edit Mode prepopulation
+  useEffect(() => {
+    if (editData) {
+      setReason(editData.reason || '');
+      setSelectedLeaveType(editData.leaveType.toUpperCase());
+      
+      if (editData.startDate) {
+        const sDate = new Date(editData.startDate);
+        setStartDateObj(sDate);
+        setStartDate(formatDate(sDate));
+      }
+      
+      if (editData.endDate) {
+        const eDate = new Date(editData.endDate);
+        setEndDateObj(eDate);
+        setEndDate(formatDate(eDate));
+      }
+
+      // If teamLeads are already loaded, find the team lead
+      if (teamLeads.length > 0 && editData.teamLeadId) {
+        const lead = teamLeads.find(l => l._id === editData.teamLeadId);
+        if (lead) setSelectedTeamLead(lead);
+      }
+    }
+  }, [editData, teamLeads.length]);
+
+  const fetchTeamLeads = async () => {
+    try {
+      setFetchingLeads(true);
+      const response = await AttendanceAPI.getAllTeamleads();
+      if (response.isSuccess && response.data) {
+        setTeamLeads(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching team leads:', error);
+      SnackbarService.showError('Failed to load team leads');
+    } finally {
+      setFetchingLeads(false);
+    }
+  };
+
+  // Leave types (Uppercase as per new backend spec)
   const leaveTypes = [
-    'annual leave',
-    'sick leave',
-    'casual leave',
-    'maternity leave',
-    'paternity leave',
-    'emergency leave',
+    'CASUAL',
+    'SICK',
+    'ANNUAL',
+    'EMERGENCY',
   ];
 
   const calculateLeaveDays = () => {
@@ -144,6 +192,10 @@ export default function LeaveRequestScreen() {
       SnackbarService.showError('Reason is required');
       return;
     }
+    if (!selectedTeamLead) {
+      SnackbarService.showError('Please select a Team Lead');
+      return;
+    }
     setShowConfirmModal(true);
   };
 
@@ -158,14 +210,15 @@ export default function LeaveRequestScreen() {
         return;
       }
 
-      const leaveRequest = {
-        empDocId: userData._id,
-        leaveType: selectedLeaveType,
-        leaves: calculateLeaveDays(),
+      const leaveRequest: CreateLeavePayload = {
+        employeeId: userData._id,
+        leaveType: selectedLeaveType, // Now uppercase CASUAL/SICK/etc
         startDate: startDate,
         endDate: endDate,
         reason: reason.trim(),
-        status: 'pending',
+        status: 'PENDING',
+        teamLeadId: selectedTeamLead?._id || '',
+        durationType: 'FULL_DAY', // Defaulting to full day as per example
       };
 
       const response = await AttendanceAPI.createLeave(leaveRequest);
@@ -174,7 +227,18 @@ export default function LeaveRequestScreen() {
         SnackbarService.showSuccess('Leave request submitted successfully!');
         setLoading(false);
         setShowConfirmModal(false);
-        navigation.goBack();
+        
+        // Safe navigation: Try to go back, if not possible, navigate to Dashboard
+        try {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('Dashboard');
+          }
+        } catch (navError) {
+          console.error('Navigation error:', navError);
+          navigation.navigate('Dashboard');
+        }
       } else {
         SnackbarService.showError(response.message || 'Failed to submit leave request');
         setLoading(false);
@@ -357,7 +421,7 @@ export default function LeaveRequestScreen() {
             )}
           </View>
 
-          {startDate && endDate && (
+          {startDate !== '' && endDate !== '' && (
             <View style={styles.daysInfo}>
               <Text style={styles.daysText}>Total Days: {calculateLeaveDays()}</Text>
             </View>
@@ -401,6 +465,34 @@ export default function LeaveRequestScreen() {
           )}
         </Animated.View>
 
+        {/* Team Lead Section */}
+        <Animated.View style={[
+          styles.section,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: formSlide3 }],
+          }
+        ]}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Team Lead</Text>
+            <Text style={styles.required}>*</Text>
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.picker, !selectedTeamLead && { borderColor: '#5FB0B7', borderWidth: 2 }]} 
+            onPress={() => setShowTeamLeadModal(true)}
+          >
+            <Text style={selectedTeamLead ? styles.selectedText : styles.placeholderText}>
+              {selectedTeamLead ? selectedTeamLead.fullName : 'Select Team Lead'}
+            </Text>
+            {fetchingLeads ? (
+              <ActivityIndicator size="small" color="#5B4BFF" />
+            ) : (
+              <ChevronDown size={22} color="#64748B" />
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* Submit Button */}
         <Animated.View style={{
           opacity: fadeAnim,
@@ -414,6 +506,52 @@ export default function LeaveRequestScreen() {
 
       {/* Leave Type Modal */}
       <LeaveTypeModal />
+
+      {/* Team Lead Modal */}
+      <Modal visible={showTeamLeadModal} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setShowTeamLeadModal(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, { maxHeight: '60%' }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Team Lead</Text>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {teamLeads.map((lead) => (
+                    <TouchableOpacity
+                      key={lead._id}
+                      style={styles.leaveTypeOption}
+                      onPress={() => {
+                        setSelectedTeamLead(lead);
+                        setShowTeamLeadModal(false);
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {lead.profilePhotoUrl ? (
+                          <Image 
+                            source={{ uri: lead.profilePhotoUrl }} 
+                            style={{ width: 40, height: 40, borderRadius: 20 }} 
+                          />
+                        ) : (
+                          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                            <User size={20} color="#94A3B8" />
+                          </View>
+                        )}
+                        <View>
+                          <Text style={styles.leaveTypeText}>{lead.fullName}</Text>
+                          <Text style={{ fontSize: 12, color: '#64748B' }}>{lead.position}</Text>
+                        </View>
+                      </View>
+                      {selectedTeamLead?._id === lead._id && <Check size={20} color="#5B4BFF" />}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* Confirmation Modal */}
       <Modal visible={showConfirmModal} transparent animationType="fade">
@@ -436,6 +574,9 @@ export default function LeaveRequestScreen() {
 
                   <Text style={styles.summaryLabel}>Total Days:</Text>
                   <Text style={styles.summaryValue}>{calculateLeaveDays()}</Text>
+
+                  <Text style={styles.summaryLabel}>Team Lead:</Text>
+                  <Text style={styles.summaryValue}>{selectedTeamLead?.fullName || 'Not selected'}</Text>
 
                   <Text style={styles.summaryLabel}>Reason:</Text>
                   <Text style={styles.summaryValue}>{reason || 'Not provided'}</Text>

@@ -50,7 +50,7 @@ export default function TermsConditionsScreen() {
           <Text style={styles.sectionTitle}>2. Description of Service</Text>
           <Text style={styles.paragraph}>
             The Attendance App is a mobile application designed to help organizations track employee
-            attendance through biometric authentication, GPS location verification, and manual time
+            attendance through biometric authentication and manual time
             tracking. The service includes attendance logging, reporting, leave management, and
             administrative oversight features.
           </Text>
@@ -88,21 +88,14 @@ export default function TermsConditionsScreen() {
             our Privacy Policy and applicable privacy laws.
           </Text>
 
-          <Text style={styles.sectionTitle}>6. Location Services</Text>
-          <Text style={styles.paragraph}>
-            The App may use GPS and location services to verify attendance at designated work
-            locations. By using location features, you consent to the collection and use of your
-            location data for attendance verification purposes only.
-          </Text>
-
-          <Text style={styles.sectionTitle}>7. Data Accuracy</Text>
+          <Text style={styles.sectionTitle}>6. Data Accuracy</Text>
           <Text style={styles.paragraph}>
             While we strive to provide accurate attendance tracking, the App's functionality depends
             on various factors including device capabilities, network connectivity, and user input.
             You acknowledge that attendance records may not be 100% accurate in all circumstances.
           </Text>
 
-          <Text style={styles.sectionTitle}>8. Intellectual Property</Text>
+          <Text style={styles.sectionTitle}>7. Intellectual Property</Text>
           <Text style={styles.paragraph}>
             The App and its original content, features, and functionality are owned by us and are
             protected by copyright, trademark, and other intellectual property laws. You may not

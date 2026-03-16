@@ -18,7 +18,6 @@ interface ConfigType {
   };
   FEATURES: {
     BIOMETRIC_ATTENDANCE: boolean;
-    LOCATION_TRACKING: boolean;
     OFFLINE_MODE: boolean;
   };
   UI: {
@@ -35,7 +34,9 @@ interface ConfigType {
 
 const config: ConfigType = {
   API: {
-    BASE_URL: 'https://leohours.pakhims.com',
+    // BASE_URL: 'http://192.168.1.100:3000', // Local development
+    // BASE_URL: 'https://staging.attendanceapp.com', // Staging
+    BASE_URL: 'https://attendance.curelogics.org', // Production
   },
   AUTH: {
     TOKEN_KEY: 'auth_token',
@@ -53,7 +54,6 @@ const config: ConfigType = {
   },
   FEATURES: {
     BIOMETRIC_ATTENDANCE: true,
-    LOCATION_TRACKING: true,
     OFFLINE_MODE: false,
   },
   UI: {

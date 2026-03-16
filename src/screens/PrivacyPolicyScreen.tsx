@@ -47,9 +47,9 @@ export default function PrivacyPolicyScreen() {
           </Text>
           <View style={styles.bulletList}>
             <Text style={styles.bulletPoint}>• Personal information (name, email, phone number)</Text>
-            <Text style={styles.bulletPoint}>• Employment information (employee ID, department)</Text>
-            <Text style={styles.bulletPoint}>• Attendance data (check-in/check-out times, location)</Text>
-            <Text style={styles.bulletPoint}>• Device information and biometric data for authentication</Text>
+            <Text style={styles.bulletPoint}>• Employment details (employee ID, position, department)</Text>
+            <Text style={styles.bulletPoint}>• Attendance data (check-in/check-out times)</Text>
+            <Text style={styles.bulletPoint}>• Device information (for security and optimization)</Text>
           </View>
 
           <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
@@ -109,26 +109,19 @@ export default function PrivacyPolicyScreen() {
             our application.
           </Text>
 
-          <Text style={styles.sectionTitle}>8. Location Data</Text>
-          <Text style={styles.paragraph}>
-            Our app may collect location data to verify attendance at designated work locations.
-            Location data is used only for attendance verification and is not shared with third
-            parties without your consent.
-          </Text>
-
-          <Text style={styles.sectionTitle}>9. Cookies and Analytics</Text>
+          <Text style={styles.sectionTitle}>8. Cookies and Analytics</Text>
           <Text style={styles.paragraph}>
             We may use cookies and similar technologies to enhance your experience and analyze
             app usage patterns. You can control cookie preferences through your device settings.
           </Text>
 
-          <Text style={styles.sectionTitle}>10. Changes to This Policy</Text>
+          <Text style={styles.sectionTitle}>9. Changes to This Policy</Text>
           <Text style={styles.paragraph}>
             We may update this Privacy Policy from time to time. We will notify you of any material
             changes by posting the new policy on this page and updating the "Last updated" date.
           </Text>
 
-          <Text style={styles.sectionTitle}>11. Contact Us</Text>
+          <Text style={styles.sectionTitle}>10. Contact Us</Text>
           <Text style={styles.paragraph}>
             If you have any questions about this Privacy Policy or our data practices, please contact us at:
           </Text>

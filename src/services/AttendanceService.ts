@@ -36,9 +36,7 @@ export const AttendanceService = {
       const payload = {
         userId: userId,
         type: type, // 'CHECK_IN' or 'CHECK_OUT'
-        timestamp: new Date().toISOString(),
-        // You can add location data here later
-        // location: { lat: ..., long: ... } 
+        timestamp: new Date().toISOString()
       };
 
 

@@ -3,7 +3,7 @@ import config from '../config/app.config';
 
 export interface UserData {
   _id: string;
-  employeeId: string;
+  empCode: string;
   fullName: string;
   officialEmail: string;
   personalEmail: string;
@@ -187,7 +187,6 @@ export const StorageService = {
   },
 
   // Mark that the user has seen the welcome screen
-  // Mark that the user has seen the welcome screen
   setWelcomeSeen: async (): Promise<void> => {
     try {
       await AsyncStorage.setItem('has_seen_welcome', 'true');
@@ -196,22 +195,13 @@ export const StorageService = {
     }
   },
 
-  // Check if user has consented to location usage
-  hasSeenLocationConsent: async (): Promise<boolean> => {
+  // Mark profile setup as seen
+  setProfileSetupSeen: async (): Promise<void> => {
     try {
-      const seen = await AsyncStorage.getItem('location_consent_seen');
-      return seen === 'true';
-    } catch (error) {
-      return false;
-    }
-  },
-
-  // Mark location consent as seen
-  setLocationConsentSeen: async (): Promise<void> => {
-    try {
-      await AsyncStorage.setItem('location_consent_seen', 'true');
-    } catch (error) {
-      throw error;
+      await AsyncStorage.setItem('profile_setup_seen', 'true');
+    } catch (error)
+    {
+      console.error('Error setting profile setup seen status:', error);
     }
   },
 };

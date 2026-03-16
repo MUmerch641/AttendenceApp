@@ -47,6 +47,7 @@ export default function ProfileScreen() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -123,10 +124,14 @@ export default function ProfileScreen() {
             SnackbarService.showSuccess('Profile picture updated successfully!');
 
             // Update local user data with new profile photo URL from response
-            const profilePhotoUrl = result.fileUrl || result.data?.fileUrl;
+            let profilePhotoUrl = result.fileUrl || result.data?.fileUrl;
             if (profilePhotoUrl) {
+              // Extra safety: Ensure HTTPS
+              profilePhotoUrl = profilePhotoUrl.replace(/^http:\/\//i, 'https://');
+              
               const updatedUserData = { ...userData!, profilePhotoUrl };
               setUserData(updatedUserData);
+              setImageError(false); // Reset error state for new image
               await StorageService.saveUserData(updatedUserData);
 
               // Emit event to notify other screens about the profile image update
@@ -200,7 +205,7 @@ export default function ProfileScreen() {
             onPress={() => userData.profilePhotoUrl && setShowImagePreview(true)}
             activeOpacity={userData.profilePhotoUrl ? 0.7 : 1}
           >
-            {userData.profilePhotoUrl ? (
+            {userData.profilePhotoUrl && !imageError ? (
               <FastImage
                 source={{
                   uri: userData.profilePhotoUrl,
@@ -208,6 +213,7 @@ export default function ProfileScreen() {
                 }}
                 style={styles.avatar}
                 resizeMode={FastImage.resizeMode.cover}
+                onError={() => setImageError(true)}
               />
             ) : (
               <View style={styles.defaultAvatar}>
@@ -222,7 +228,7 @@ export default function ProfileScreen() {
 
           <View style={styles.infoContainer}>
             <Text style={styles.name}>{userData.fullName}</Text>
-            <Text style={styles.employeeId}>Employee ID : {userData.employeeId}</Text>
+            <Text style={styles.employeeId}>Employee ID : {userData.empCode}</Text>
 
             <TouchableOpacity
               style={[styles.changeImageBtn, uploading && styles.changeImageBtnDisabled]}

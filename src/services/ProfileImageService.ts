@@ -26,7 +26,9 @@ export const ProfileImageService = {
    * @param imageUrl - The new profile image URL
    */
   emitProfileImageUpdate: (imageUrl: string) => {
-    profileImageEmitter.emit(imageUrl);
+    // Ensure the URL is secure before emitting
+    const secureUrl = imageUrl.replace(/^http:\/\//i, 'https://');
+    profileImageEmitter.emit(secureUrl);
   },
 
   /**

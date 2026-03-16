@@ -20,14 +20,13 @@ import LinearGradient from 'react-native-linear-gradient';
 import FastImage from 'react-native-fast-image';
 import {
   Bell, Clock, Coffee, LogOut, Fingerprint, Briefcase,
-  CheckCircle, AlertCircle, Timer, User
+  CheckCircle, AlertCircle, Timer, User, ArrowRight
 } from 'lucide-react-native';
 
 import { AttendanceService } from '../services/AttendanceService';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService, UserData } from '../services/StorageService';
 import { NavigationService } from '../services/NavigationService';
-import { LocationService } from '../services/LocationService';
 import { IpService } from '../services/IpService';
 import { NotificationService } from '../services/NotificationService';
 import { NotificationsAPI } from '../api/notifications';
@@ -59,6 +58,10 @@ export default function HomeScreen() {
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [attendanceReason, setAttendanceReason] = useState('');
   const [pendingAttendanceAction, setPendingAttendanceAction] = useState<'CHECK_IN' | 'CHECK_OUT' | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [attendanceMessage, setAttendanceMessage] = useState<string | null>(null);
+  const [attendanceStatus, setAttendanceStatus] = useState<string | null>(null);
+  const [isAllowToMark, setIsAllowToMark] = useState(true);
   const [syncLoading, setSyncLoading] = useState(false);
 
   // Animation values
@@ -144,9 +147,11 @@ export default function HomeScreen() {
     loadAttendanceSession();
     syncAttendanceStatus();
     checkBiometricsAvailability();
+    loadDashboardState();
 
     // Listen for profile image updates
     const unsubscribe = ProfileImageService.onProfileImageUpdate((newImageUrl) => {
+      setImageError(false); // Reset error state on update
       setUserData((prevUserData) => {
         if (prevUserData) {
           return { ...prevUserData, profilePhotoUrl: newImageUrl };
@@ -191,9 +196,9 @@ export default function HomeScreen() {
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
         setWorkedTime(`${hours}h ${minutes}m`);
       };
-       
+
       updateWorkedTime(); // Update immediately
-      
+
       // Then update every 30 seconds for better responsiveness
       intervalId = setInterval(updateWorkedTime, 30000);
     }
@@ -219,7 +224,6 @@ export default function HomeScreen() {
     try {
       const data = await StorageService.getUserData();
       setUserData(data);
-      if (data) await loadEmployeeStats(data._id);
     } catch (error) {
       ErrorHandler.logError(error, 'HomeScreen - loadUserData');
     }
@@ -259,76 +263,76 @@ export default function HomeScreen() {
     }
   };
 
-  const loadEmployeeStats = async (empDocId: string) => {
+  const loadDashboardState = async () => {
     try {
       const currentDate = new Date();
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const response = await AttendanceAPI.employeeStats({ year, month, empDocId });
+      // Format as YYYY-MM-DD
+      const dateStr = currentDate.toISOString().split('T')[0];
+
+      const response = await AttendanceAPI.dashboardState({ from: dateStr, to: dateStr });
       if (response.isSuccess && response.data) {
+        const getVal = (name: string) => response.data.find(i => i.name === name)?.value || 0;
         setEmployeeStats({
-          onTimeDays: response.data.onTimeDays,
-          lateDays: response.data.lateDays,
-          onLeaveDays: response.data.onLeaveDays,
-          absentDays: response.data.absentDays,
+          onTimeDays: getVal('On Time'),
+          lateDays: getVal('Late'),
+          onLeaveDays: getVal('Leave'),
+          absentDays: getVal('Absent'),
         });
       }
     } catch (error) {
-      ErrorHandler.logError(error, 'HomeScreen - loadEmployeeStats');
+      ErrorHandler.logError(error, 'HomeScreen - loadDashboardState');
     }
   };
 
   const syncAttendanceStatus = async () => {
     try {
       setSyncLoading(true);
-      const response = await AttendanceAPI.checkStatus();
-      
+      const response = await AttendanceAPI.getMyStatus();
+
       if (response.isSuccess && response.data) {
-        const { hasTimedIn, hasTimedOut } = response.data;
+        const { timeIn, timeOut, message, status, isAllowToMark: allowMark } = response.data;
         
+        setAttendanceMessage(message);
+        setAttendanceStatus(status);
+        setIsAllowToMark(allowMark !== false); // Default to true if missing
+
         // Sync the UI state with backend status
-        if (hasTimedIn && !hasTimedOut) {
-          // User has checked in but not checked out - update UI if out of sync
-          if (!isCheckedIn) {
-            setIsCheckedIn(true);
-            // Try to get time from local session, otherwise set defaults
-            const session = await StorageService.getAttendanceSession();
-            if (session?.checkInTime) {
-              setCheckInTime(session.checkInTime);
-              setCheckInTimestamp(session.checkInTimestamp ? new Date(session.checkInTimestamp) : null);
-            } else {
-              // Backend says checked in but no local data - use approximate time
-              const now = new Date();
-              const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              setCheckInTime(timeStr);
-              setCheckInTimestamp(now);
-              // Save to AsyncStorage
-              await StorageService.saveAttendanceSession({
-                isCheckedIn: true,
-                checkInTime: timeStr,
-                checkInTimestamp: now.toISOString(),
-                workedTime: '0h 0m'
-              });
-            }
-          }
-        } else if (hasTimedOut || (!hasTimedIn && !hasTimedOut)) {
-          // User has completed the day or hasn't checked in yet
-          if (isCheckedIn) {
-            // Local state shows checked in, but backend says completed - sync it
-            setIsCheckedIn(false);
-            setCheckInTimestamp(null);
-            // Update AsyncStorage
+        const isCurrentlyCheckedIn = !!(timeIn && !timeOut);
+        setIsCheckedIn(isCurrentlyCheckedIn);
+
+        if (timeIn) {
+          const checkInDate = new Date(timeIn);
+          const formattedTime = checkInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          setCheckInTime(formattedTime);
+          setCheckInTimestamp(checkInDate);
+
+          // Update session if it's different or missing
+          const session = await StorageService.getAttendanceSession();
+          if (!session || session.isCheckedIn !== isCurrentlyCheckedIn || session.checkInTime !== formattedTime) {
             await StorageService.saveAttendanceSession({
-              isCheckedIn: false,
-              checkInTime: checkInTime,
-              checkInTimestamp: null,
+              isCheckedIn: isCurrentlyCheckedIn,
+              checkInTime: formattedTime,
+              checkInTimestamp: timeIn,
               workedTime: workedTime
+            });
+          }
+        } else {
+          setCheckInTime('--:--');
+          setCheckInTimestamp(null);
+          setWorkedTime('0h 0m');
+          
+          const session = await StorageService.getAttendanceSession();
+          if (session?.isCheckedIn) {
+             await StorageService.saveAttendanceSession({
+              isCheckedIn: false,
+              checkInTime: '--:--',
+              checkInTimestamp: null,
+              workedTime: '0h 0m'
             });
           }
         }
       }
     } catch (error) {
-      // Silently fail, don't disrupt user experience
       ErrorHandler.logError(error, 'HomeScreen - syncAttendanceStatus');
     } finally {
       setSyncLoading(false);
@@ -337,150 +341,104 @@ export default function HomeScreen() {
 
 
 
-  const handleTabPress = (tab: 'Check' | 'Break' | 'Leave') => {
+  const handleTabPress = (tab: 'Check' | 'Leave') => {
     if (tab === 'Leave') {
       NavigationService.navigate('LeaveRequest');
-    } else {
-      setActiveTab(tab);
+      return;
     }
+    setActiveTab(tab);
   };
 
   const handleAttendancePress = async () => {
-    // Show reason modal first
-    // setPendingAttendanceAction(isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN');
-    // setAttendanceReason('');
-    // setShowReasonModal(true);
+    // Prevent double-taps
+    if (loading) return;
     
     // Directly process attendance without reason modal
     processAttendance();
   };
 
   const processAttendance = async () => {
-    // if (!attendanceReason.trim()) {
-    //   SnackbarService.showError('Please enter a reason');
-    //   return;
-    // }
-
-    // setShowReasonModal(false);
-
-    // If biometrics are available, use biometric authentication
+    // 1. Biometric Authentication (if available)
     if (biometricsAvailable) {
-      const { available } = await AttendanceService.checkAvailability();
-      if (!available) {
-        SnackbarService.showError('Biometrics not available on this device');
-        return;
-      }
-
+      // NOTE: We already checked availability in useEffect, so we skip checkAvailability here for speed.
       const isAuthenticated = await AttendanceService.authenticateUser();
       if (!isAuthenticated) {
         SnackbarService.showError("Biometric authentication failed");
         return;
       }
     }
-    // If biometrics are not available, proceed without authentication
-
+    // 1. Show Loading state immediately
     setLoading(true);
+
     try {
-      // Check for location consent
-      const hasConsented = await StorageService.hasSeenLocationConsent();
-      if (!hasConsented) {
-        setLoading(false);
-        Alert.alert(
-          'Location Tracking Required',
-          'To mark attendance, we need to access your location to verify you are at the correct work site. Your location is only recorded during Check-In and Check-Out.',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel'
-            },
-            {
-              text: 'I Understand',
-              onPress: async () => {
-                await StorageService.setLocationConsentSeen();
-                processAttendance(); // Retry automatically
-              }
-            }
-          ]
-        );
-        return;
+      // Fetch Real IP Address
+      let ipAddress = '';
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        if (ipData && ipData.ip) {
+          ipAddress = ipData.ip;
+        }
+      } catch (err) {
+        // Fallback silently if IP fetch fails
       }
 
-      // Get user's current location first
-      const locationResult = await LocationService.getCurrentLocation();
+      // Use cached userData from state if available to save time
+      const user = userData || await StorageService.getUserData();
 
-      if (!locationResult.success || !locationResult.coordinates) {
-        SnackbarService.showError(locationResult.error || 'Unable to get your location. Please enable location services.');
-        setLoading(false);
-        return;
-      }
-
-      const { latitude, longitude } = locationResult.coordinates;
-
-      // Get IP Address (Optional - don't block if fails)
-      const ipAddress = await IpService.getPublicIp();
-
-      const user = await StorageService.getUserData();
       if (!user) {
-        SnackbarService.showError('User data not found');
-        setLoading(false);
-        return;
+        throw new Error('User data not found');
       }
 
       const payload = {
-        empId: user.employeeId,
-        reason: isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN', // attendanceReason.trim(),
-        latitude,
-        longitude,
-        ipAddress: ipAddress || undefined,
+        ipAddress,
       };
 
       const response = await AttendanceAPI.create(payload);
-      if (response.isSuccess) {
-        if (!isCheckedIn) {
-          setIsCheckedIn(true);
-          const now = new Date();
-          setCheckInTimestamp(now);
-          const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          setCheckInTime(formattedTime);
-          setWorkedTime('0h 0m'); // Reset worked time to 0h 0m on check-in
 
-          // Save to AsyncStorage
+      if (response.isSuccess) {
+        // Success! Update UI
+        const now = new Date();
+        const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        if (!isCheckedIn) {
+          // Was checking in
+          setIsCheckedIn(true);
+          setCheckInTime(formattedTime);
+          setCheckInTimestamp(now);
+          setWorkedTime('0h 0m');
+          
           await StorageService.saveAttendanceSession({
             isCheckedIn: true,
             checkInTime: formattedTime,
             checkInTimestamp: now.toISOString(),
             workedTime: '0h 0m'
           });
-
-          SnackbarService.showSuccess(response.message || "Checked In Successfully!");
+          SnackbarService.showSuccess("Checked In Successfully!");
         } else {
+          // Was checking out
           setIsCheckedIn(false);
-          setCheckInTimestamp(null);
-
-          // Clear check-in time and working time for next day
           setCheckInTime('--:--');
-          setWorkedTime('0h 0m');
-
-          // Save to AsyncStorage
+          setCheckInTimestamp(null);
+          
           await StorageService.saveAttendanceSession({
             isCheckedIn: false,
             checkInTime: '--:--',
             checkInTimestamp: null,
             workedTime: '0h 0m'
           });
-
-          SnackbarService.showSuccess(response.message || "Checked Out Successfully!");
+          SnackbarService.showSuccess("Checked Out Successfully!");
         }
+        // Refresh status to get updated messages/tags from backend
+        syncAttendanceStatus();
       } else {
-        const errorMsg = response.message || "Failed to mark attendance";
-        ErrorHandler.showError(new Error(errorMsg));
+        throw new Error(response.message || "Failed to mark attendance");
       }
-    } catch (error) {
-      ErrorHandler.showError(error, "Failed to connect to server");
+
+    } catch (error: any) {
+      ErrorHandler.showError(error);
     } finally {
       setLoading(false);
-      // setPendingAttendanceAction(null);
-      // setAttendanceReason('');
     }
   };
 
@@ -507,7 +465,7 @@ export default function HomeScreen() {
               onPress={() => userData?.profilePhotoUrl && setShowImagePreview(true)}
               activeOpacity={userData?.profilePhotoUrl ? 0.7 : 1}
             >
-              {userData?.profilePhotoUrl ? (
+              {userData?.profilePhotoUrl && !imageError ? (
                 <FastImage
                   source={{
                     uri: userData.profilePhotoUrl,
@@ -515,6 +473,7 @@ export default function HomeScreen() {
                   }}
                   style={styles.avatar}
                   resizeMode={FastImage.resizeMode.cover}
+                  onError={() => setImageError(true)}
                 />
               ) : (
                 <View style={styles.defaultAvatar}>
@@ -574,75 +533,117 @@ export default function HomeScreen() {
           ))}
         </Animated.View>
 
-        {/* STATUS + FINGERPRINT */}
+        {/* ATTENDANCE CARD */}
         <Animated.View style={[
-          styles.statusContainer,
+          styles.attendanceCardWrapper,
           {
             opacity: fadeAnim,
             transform: [{ translateY: cardSlide }],
           }
         ]}>
-          <View style={styles.timeInfoCard}>
-            <View style={styles.timeRow}>
-              <View style={styles.iconBox}><Clock size={20} color="#5B4BFF" /></View>
-              <View>
-                <Text style={styles.timeLabel}>Check In Time</Text>
-                <Text style={styles.timeValue}>{checkInTime}</Text>
+          <View style={styles.mainAttendanceCard}>
+            <View style={styles.cardInternalLayout}>
+              {/* Left Column: Stats */}
+              <View style={styles.cardLeftCol}>
+                <View style={styles.timeInfoItem}>
+                  <View style={styles.iconBox}><Clock size={18} color="#5B4BFF" /></View>
+                  <View>
+                    <Text style={styles.timeLabel}>Check In Time</Text>
+                    <Text style={styles.timeValue}>{checkInTime}</Text>
+                  </View>
+                </View>
+                <View style={[styles.timeInfoItem, { marginTop: 16 }]}>
+                  <View style={styles.iconBox}><Timer size={18} color="#5B4BFF" /></View>
+                  <View>
+                    <Text style={styles.timeLabel}>Working Time</Text>
+                    <Text style={styles.timeValue}>{workedTime}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
-            <View style={[styles.timeRow, { marginTop: 20 }]}>
-              <View style={styles.iconBox}><Timer size={20} color="#5B4BFF" /></View>
-              <View>
-                <Text style={styles.timeLabel}>Working Time</Text>
-                <Text style={styles.timeValue}>{workedTime}</Text>
-              </View>
-            </View>
-          </View>
 
-          {/* Animated Check In/Out Button without white box */}
-          <View style={styles.actionContainer}>
-            {biometricsAvailable === false ? (
-              // Simple Check In/Out button when biometrics not available
-              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                <TouchableOpacity
-                  style={[styles.simpleButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
-                  activeOpacity={0.85}
-                  onPress={handleAttendancePress}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Text style={styles.simpleButtonText}>
-                      {isCheckedIn ? 'Check Out' : 'Check In'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-            ) : (
-              // Fingerprint button with glow animation
-              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                <Animated.View
-                  style={[
-                    styles.glowRing,
-                    {
-                      opacity: glowAnim,
-                      backgroundColor: isCheckedIn ? '#EF444420' : '#5B4BFF20',
-                    },
-                  ]}
-                />
-                <TouchableOpacity
-                  style={[styles.checkOutButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
-                  activeOpacity={0.85}
-                  onPress={handleAttendancePress}
-                  disabled={loading || syncLoading}
-                >
-                  {(loading || syncLoading) ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
-                  <Text style={styles.checkOutText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>
-                </TouchableOpacity>
-              </Animated.View>
+              {/* Right Column: Action */}
+              <View style={styles.cardRightCol}>
+                {!isCheckedIn && !isAllowToMark ? (
+                   <View style={styles.completedBadge}>
+                      <CheckCircle size={32} color="#10B981" />
+                      <Text style={styles.completedText}>Completed</Text>
+                   </View>
+                ) : (
+                  <>
+                    {biometricsAvailable === false ? (
+                      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                        <TouchableOpacity
+                          style={[styles.simpleButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
+                          activeOpacity={0.85}
+                          onPress={handleAttendancePress}
+                          disabled={loading}
+                        >
+                          {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.simpleButtonText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>}
+                        </TouchableOpacity>
+                      </Animated.View>
+                    ) : (
+                      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                        <Animated.View style={[styles.glowRing, { opacity: glowAnim, backgroundColor: isCheckedIn ? '#EF444420' : '#5B4BFF20' }]} />
+                        <TouchableOpacity
+                          style={[styles.checkOutButton, isCheckedIn ? styles.btnRed : styles.btnBlue]}
+                          activeOpacity={0.85}
+                          onPress={handleAttendancePress}
+                          disabled={loading || syncLoading}
+                        >
+                          {(loading || syncLoading) ? <ActivityIndicator size="small" color="#FFF" /> : <Fingerprint size={40} color="#FFF" />}
+                          <Text style={styles.checkOutText}>{isCheckedIn ? 'Check Out' : 'Check In'}</Text>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    )}
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Bottom Message */}
+            {attendanceMessage && (
+              <View style={styles.messageFooter}>
+                 <Text style={styles.attendanceMessageText}>{attendanceMessage}</Text>
+              </View>
             )}
           </View>
+
+          {/* Status Badge (Placed outside main card to prevent clipping on Android) */}
+          {attendanceStatus && (
+            <View style={styles.statusBadgeContainer}>
+              <View style={[styles.statusBadge, { 
+                backgroundColor: attendanceStatus.toLowerCase() === 'ontime' ? '#D1FAE5' : '#FEF3C7', 
+                borderColor: attendanceStatus.toLowerCase() === 'ontime' ? '#10B981' : '#F59E0B' 
+              }]}>
+                <View style={[styles.statusDot, { backgroundColor: attendanceStatus.toLowerCase() === 'ontime' ? '#10B981' : '#F59E0B' }]} />
+                <Text style={[styles.statusBadgeText, { color: attendanceStatus.toLowerCase() === 'ontime' ? '#047857' : '#B45309' }]}>{attendanceStatus}</Text>
+              </View>
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Quick Help / Manual Request Card */}
+        <Animated.View style={[
+          styles.quickHelpContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: cardSlide }],
+          }
+        ]}>
+          <TouchableOpacity 
+            style={styles.quickHelpCard}
+            onPress={() => NavigationService.navigate('AttendanceRequest')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.quickHelpIcon}>
+              <AlertCircle size={22} color="#5B4BFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quickHelpTitle}>Forgot to check in?</Text>
+              <Text style={styles.quickHelpSubtitle}>Submit a manual attendance request here</Text>
+            </View>
+            <ArrowRight size={20} color="#64748B" />
+          </TouchableOpacity>
         </Animated.View>
 
         {/* TODAY TIME LOG GRID */}
@@ -847,13 +848,107 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   activeTabText: { color: '#FFFFFF' },
 
-  statusContainer: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 30, gap: 16 },
-  timeInfoCard: { flex: 1.2, backgroundColor: '#FFF', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 5 },
-  timeRow: { flexDirection: 'row', alignItems: 'center' },
-  iconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  timeLabel: { fontSize: 12, color: '#64748B', marginBottom: 2 },
-  timeValue: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-
+  attendanceCardWrapper: {
+    marginHorizontal: 24,
+    marginBottom: 24,
+    position: 'relative',
+    zIndex: 10,
+    elevation: 8,
+  },
+  mainAttendanceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#5B4BFF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(91, 75, 255, 0.05)',
+  },
+  cardInternalLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardLeftCol: {
+    flex: 1,
+  },
+  cardRightCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 20,
+  },
+  timeInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusBadgeContainer: {
+    position: 'absolute',
+    top: -14,
+    alignSelf: 'center',
+    zIndex: 20,
+    elevation: 10,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  timeLabel: { fontSize: 12, color: '#94A3B8', marginBottom: 2, fontWeight: '600' },
+  timeValue: { fontSize: 18, color: '#1E293B', fontWeight: '800' },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  messageFooter: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  attendanceMessageText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  completedBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  completedText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#10B981',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   actionContainer: {
     flex: 0.8,
     alignItems: 'center',
@@ -895,6 +990,44 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   simpleButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+
+  quickHelpContainer: {
+    marginHorizontal: 24,
+    marginBottom: 24,
+  },
+  quickHelpCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  quickHelpIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F5F3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  quickHelpTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  quickHelpSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+  },
   btnRed: { backgroundColor: '#EF4444', borderColor: '#FEF2F2', shadowColor: '#EF4444' },
   btnBlue: { backgroundColor: '#5B4BFF', borderColor: '#E0E7FF', shadowColor: '#5B4BFF' },
 

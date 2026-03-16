@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
-import { Calendar, Clock, User, AlertCircle, Search, Filter, X, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Calendar, Clock, User, AlertCircle, Search, Filter, X, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { FlashList } from '@shopify/flash-list';
 import { AttendanceAPI, EmployeeReportParams } from '../api/attendance';
 import { SnackbarService } from '../services/SnackbarService';
 import { StorageService } from '../services/StorageService';
+import { NavigationService } from '../services/NavigationService';
 import { ErrorHandler } from '../utils/errorHandler';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -46,16 +47,12 @@ const formatDate = (date: Date, format: string) => {
 };
 
 type AttendanceItem = {
-  _id: string;
-  empId?: string;
-  reason?: string;
-  status?: 'present' | 'late' | 'absent';
-  timeIn?: string;
-  timeOut?: string;
-  createdAt: string;
-  empDocId?: string;
-  updatedAt?: string;
-  __v?: number;
+  date: string;
+  timeIn: string;
+  timeOut: string;
+  status: string;
+  workingHours: string;
+  breakMins: number;
 };
 
 export default function HistoryScreen() {
@@ -69,7 +66,6 @@ export default function HistoryScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [totalCount, setTotalCount] = useState(0);
-  const [empDocId, setEmpDocId] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   
@@ -108,37 +104,22 @@ export default function HistoryScreen() {
         pageNo: page,
       };
 
-      const response = await AttendanceAPI.reportsByEmployee(reportParams);
+      const response = await AttendanceAPI.recentAttendance();
       
-      if (response.isSuccess) {
-        let attendanceRecords: AttendanceItem[] = [];
+      if (response.isSuccess && response.data) {
+        let attendanceRecords: AttendanceItem[] = response.data;
         
-        if (response.data && response.data.length > 0 && response.data[0].attendance) {
-          attendanceRecords = response.data[0].attendance;
-        }
-        
-        if (append) {
-          setData(prev => [...prev, ...attendanceRecords]);
-          setFilteredData(prev => [...prev, ...attendanceRecords]);
-        } else {
-          setData(attendanceRecords);
-          setFilteredData(attendanceRecords);
-        }
-        
+        setData(attendanceRecords);
+        setFilteredData(attendanceRecords);
         setTotalCount(attendanceRecords.length || 0);
-        setEmpDocId(userData._id);
-        setHasMore(attendanceRecords.length === PAGE_SIZE);
         setError(null);
+        setHasMore(false); // Recent API usually returns a fixed count, no pagination info provided yet
       } else {
         const errorMsg = response.message || 'Failed to load attendance data';
-        if (!append) {
-          setError(errorMsg);
-          setErrorType('server');
-          setData([]);
-          setFilteredData([]);
-        } else {
-          SnackbarService.showError(errorMsg);
-        }
+        setError(errorMsg);
+        setErrorType('server');
+        setData([]);
+        setFilteredData([]);
         setTotalCount(0);
         setHasMore(false);
       }
@@ -176,9 +157,8 @@ export default function HistoryScreen() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(item => 
-        item.empId?.toLowerCase().includes(query) ||
-        item.reason?.toLowerCase().includes(query) ||
-        item.status?.toLowerCase().includes(query)
+        item.date.includes(query) ||
+        item.status.toLowerCase().includes(query)
       );
     }
 
@@ -211,12 +191,14 @@ export default function HistoryScreen() {
   };
 
   const getStatusColor = (status?: string) => {
-    if (!status) return '#64748B'; // Default color for undefined/missing status
+    if (!status) return '#64748B';
     
     switch (status.toLowerCase()) {
       case 'present': return '#10B981';
       case 'late': return '#F59E0B';
       case 'absent': return '#EF4444';
+      case 'holiday': return '#8B5CF6'; // Violet for holiday
+      case 'leave': return '#3B82F6';   // Blue for leave
       default: return '#64748B';
     }
   };
@@ -232,20 +214,20 @@ export default function HistoryScreen() {
   };
 
   const renderItem = ({ item }: { item: AttendanceItem }) => {
-    const date = new Date(item.timeIn || item.createdAt);
-    const timeIn = formatDate(date, 'hh:mm a');
-    const dateStr = formatDate(date, 'dd MMM, yyyy');
+    // Backend provides "YYYY-MM-DD"
+    const dateObj = new Date(item.date);
+    const dateStr = formatDate(dateObj, 'dd MMM, yyyy');
 
     return (
       <View style={styles.attendanceCard}>
         <View style={styles.cardHeader}>
           <View style={styles.empInfo}>
             <View style={styles.avatarPlaceholder}>
-              <User size={20} color="#64748B" />
+              <Calendar size={20} color="#5B4BFF" />
             </View>
             <View>
-              <Text style={styles.empName}>My Attendance</Text>
-              {item.empId && <Text style={styles.empId}>ID: {item.empId}</Text>}
+              <Text style={styles.empName}>{dateStr}</Text>
+              <Text style={styles.empId}>Working Hours: {item.workingHours || '--'}</Text>
             </View>
           </View>
           {getStatusBadge(item.status)}
@@ -255,23 +237,21 @@ export default function HistoryScreen() {
 
         <View style={styles.detailsRow}>
           <View style={styles.detailItem}>
-            <Calendar size={18} color="#64748B" />
-            <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>{dateStr}</Text>
+            <Clock size={18} color="#10B981" />
+            <Text style={styles.detailLabel}>Time In</Text>
+            <Text style={styles.detailValue}>{item.timeIn}</Text>
           </View>
           <View style={styles.detailItem}>
-            <Clock size={18} color="#64748B" />
-            <Text style={styles.detailLabel}>Time In</Text>
-            <Text style={styles.detailValue}>{timeIn}</Text>
+            <Clock size={18} color="#EF4444" />
+            <Text style={styles.detailLabel}>Time Out</Text>
+            <Text style={styles.detailValue}>{item.timeOut}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <AlertCircle size={18} color="#F59E0B" />
+            <Text style={styles.detailLabel}>Break</Text>
+            <Text style={styles.detailValue}>{item.breakMins}m</Text>
           </View>
         </View>
-
-        {item.reason && item.reason !== "N/A" && (
-          <View style={styles.reasonContainer}>
-            <AlertCircle size={16} color="#F59E0B" />
-            <Text style={styles.reasonText}>Reason: {item.reason}</Text>
-          </View>
-        )}
       </View>
     );
   };
@@ -322,39 +302,15 @@ export default function HistoryScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.monthNavButton}
-          onPress={() => {
-            if (currentMonth === 1) {
-              setCurrentMonth(12);
-              setCurrentYear(currentYear - 1);
-            } else {
-              setCurrentMonth(currentMonth - 1);
-            }
-          }}
-        >
-          <ChevronLeft size={24} color="#5B4BFF" strokeWidth={3} />
-        </TouchableOpacity>
-        
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>
-            {formatDate(new Date(currentYear, currentMonth - 1), 'MMMM yyyy')}
-          </Text>
-          <Text style={styles.recordCount}>{filteredData.length} / {totalCount} Records</Text>
+          <Text style={styles.headerTitle}>Recent Attendance</Text>
+          <Text style={styles.recordCount}>{filteredData.length} Records</Text>
         </View>
-        
         <TouchableOpacity 
-          style={styles.monthNavButton}
-          onPress={() => {
-            if (currentMonth === 12) {
-              setCurrentMonth(1);
-              setCurrentYear(currentYear + 1);
-            } else {
-              setCurrentMonth(currentMonth + 1);
-            }
-          }}
+          style={styles.manualRequestBtn}
+          onPress={() => NavigationService.navigate('AttendanceRequest')}
         >
-          <ChevronRight size={24} color="#5B4BFF" strokeWidth={3} />
+          <Plus size={24} color="#5B4BFF" />
         </TouchableOpacity>
       </View>
 
@@ -407,7 +363,7 @@ export default function HistoryScreen() {
       {/* FlashList with Pagination */}
       <FlashList
         data={filteredData}
-        keyExtractor={(item: AttendanceItem) => item._id}
+        keyExtractor={(item: AttendanceItem) => item.date}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
@@ -504,6 +460,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
+  },
+  manualRequestBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#5B4BFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   listContainer: {

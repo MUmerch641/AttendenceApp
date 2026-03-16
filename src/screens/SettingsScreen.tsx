@@ -34,8 +34,10 @@ import { ProfileImageService } from '../services/ProfileImageService';
 
 export default function SettingsScreen() {
   const [changePasswordModal, setChangePasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -99,7 +101,7 @@ export default function SettingsScreen() {
 
   const handleChangePassword = async () => {
     // Validation
-    if (!newPassword || !confirmPassword) {
+    if (!oldPassword || !newPassword || !confirmPassword) {
       SnackbarService.showError('Please fill in all fields');
       return;
     }
@@ -116,7 +118,10 @@ export default function SettingsScreen() {
 
     setLoading(true);
     try {
-      const response = await AuthAPI.changePassword({ newPassword });
+      const response = await AuthAPI.changePassword({ 
+        oldPassword, 
+        newPassword 
+      });
 
       if (response.isSuccess) {
         // Close modal first, then show success message
@@ -125,6 +130,7 @@ export default function SettingsScreen() {
           SnackbarService.showSuccess(response.message || 'Password changed successfully');
         }, 300); // Small delay to ensure modal is closed
         // Clear form
+        setOldPassword('');
         setNewPassword('');
         setConfirmPassword('');
       } else {
@@ -240,6 +246,32 @@ export default function SettingsScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Old Password */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Old Password</Text>
+                <View style={styles.inputContainer}>
+                  <Lock size={20} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter old password"
+                    secureTextEntry={!showOldPassword}
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowOldPassword(!showOldPassword)}
+                    style={styles.eyeButton}
+                  >
+                    {showOldPassword ? (
+                      <EyeOff size={20} color="#64748B" />
+                    ) : (
+                      <Eye size={20} color="#64748B" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* New Password */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>New Password</Text>

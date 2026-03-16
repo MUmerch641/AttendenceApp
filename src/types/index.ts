@@ -11,12 +11,13 @@ export interface ApiResponse<T = unknown> {
   message: string;
   data?: T;
   fileUrl?: string;
+  statusCode?: number;
 }
 
 // ============= User & Auth Types =============
 export interface UserData {
   _id: string;
-  employeeId: string;
+  empCode: string;
   fullName: string;
   officialEmail: string;
   personalEmail: string;
@@ -74,7 +75,7 @@ export interface AttendanceSession {
 }
 
 export interface EmployeeStats {
-  employeeId: string;
+  empCode: string;
   assignedSchedule: string;
   onTimeDays: number;
   lateDays: number;
@@ -84,13 +85,41 @@ export interface EmployeeStats {
 
 // ============= Leave Management Types =============
 export interface LeaveRequest {
-  empDocId: string;
-  leaveType: string;
-  leaves: number;
+  _id?: string;
+  employeeId: string;
+  teamLeadId: string;
+  leaveType: 'CASUAL' | 'SICK' | 'ANNUAL' | 'EMERGENCY' | string;
   startDate: string;
   endDate: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  durationType: 'FULL_DAY' | 'HALF_DAY' | string;
+  totalDays?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateLeavePayload {
+  durationType: 'FULL_DAY' | 'HALF_DAY' | string;
+  employeeId: string;
+  endDate: string;
+  leaveType: 'CASUAL'|'SICK'|'ANNUAL'|'EMERGENCY'|string;
+  reason: string;
+  startDate: string;
+  status: 'PENDING' | string;
+  teamLeadId: string;
+}
+
+export interface TeamLead {
+  _id: string;
+  fullName: string;
+  officialEmail: string;
+  position: string;
+  profilePhotoUrl?: string;
+}
+
+export interface TeamLeadsResponse extends ApiResponse<TeamLead[]> {
+  totalCount: number;
 }
 
 // ============= Image Picker Types =============
