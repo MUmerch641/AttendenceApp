@@ -78,3 +78,4 @@ yarn-error.log
 *firebase-adminsdk*.json
 google-services.json
 GoogleService-Info.plist
+config.bat
